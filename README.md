@@ -20,8 +20,6 @@ Built for developers who want a visual Kanban board that works with autonomous c
 
 ⭐ **If you find this useful, star the repo — it helps others discover it!**
 
-> **⚠️ Notice:** Repo history was rewritten (backlog purge). If you cloned recently and see weird git behavior, read: https://github.com/BradGroux/veritas-kanban/discussions/85
-
 [Quickstart](#-quickstart) · [Features](#-feature-highlights) · [All Features](docs/FEATURES.md) · [Docs](docs/) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [API](#-api-versioning) · [Agent Integration](#-agent-integration) · [MCP Server](#-mcp-server) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md)
 
 </div>
@@ -122,25 +120,25 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 
 ### 🤖 AI Agents (v2.0)
 
-- **Reverse Proxy Ready** — Deploy behind nginx, Caddy, Traefik, or any reverse proxy with the `TRUST_PROXY` environment variable (v2.1.1)
-- **Squad Chat** — Real-time agent-to-agent communication with WebSocket updates, system lifecycle events (spawned/completed/failed), model attribution per message, and configurable display names (NEW — v2.0)
-- **Broadcast Notifications** — Priority-based persistent notifications with read receipts and agent-specific delivery (NEW — v2.0)
-- **Task Deliverables** — First-class deliverable objects with type/status tracking (code, documentation, data, etc.) (NEW — v2.0)
-- **Efficient Polling** — `/api/changes?since=...` endpoint with ETag support for optimized agent polling (NEW — v2.0)
-- **Approval Delegation** — Vacation mode with scoped approval delegation and automatic routing (NEW — v2.0)
-- **OpenClaw Integration** — Direct gateway wake for real-time squad chat notifications and agent orchestration (NEW — v2.0)
-- **Squad Chat Webhook** — Configurable webhooks (generic HTTP or OpenClaw Direct) for external agent integration (NEW — v2.0)
-- **Agent registry** — Service discovery with heartbeat tracking, capabilities, and live status (NEW — v2.0)
-- **Multi-agent dashboard** — Real-time sidebar with expandable agent cards, status indicators (NEW — v2.0)
-- **Multi-agent task assignment** — Assign multiple agents per task with color-coded chips (NEW — v2.0)
-- **@Mention notifications** — @agent-name parsing in comments, thread subscriptions (NEW — v2.0)
-- **Permission levels** — Intern / Specialist / Lead tiers with approval workflows (NEW — v2.0)
-- **Error learning** — Structured failure analysis with similarity search (NEW — v2.0)
-- **Task lifecycle hooks** — 7 built-in hooks, 8 events, custom hooks API (NEW — v2.0)
 - **Agent orchestration** — Spawn autonomous coding agents on tasks
 - **Custom agents** — Add your own agents with any name and command; not limited to built-in types
 - **Platform-agnostic API** — REST endpoints work with any agentic platform
 - **Built-in OpenClaw support** — Native integration with [OpenClaw](https://github.com/openclaw/openclaw) (formerly Clawdbot/Moltbot)
+- **Squad Chat** — Real-time agent-to-agent communication with WebSocket updates, system lifecycle events (spawned/completed/failed), model attribution per message, and configurable display names (v2.0)
+- **@Mention notifications** — @agent-name parsing in comments, thread subscriptions (v2.0)
+- **Broadcast Notifications** — Priority-based persistent notifications with read receipts and agent-specific delivery (v2.0)
+- **Squad Chat Webhook** — Configurable webhooks (generic HTTP or OpenClaw Direct) for external agent integration (v2.0)
+- **Agent registry** — Service discovery with heartbeat tracking, capabilities, and live status (v2.0)
+- **Multi-agent dashboard** — Real-time sidebar with expandable agent cards, status indicators (v2.0)
+- **Multi-agent task assignment** — Assign multiple agents per task with color-coded chips (v2.0)
+- **Permission levels** — Intern / Specialist / Lead tiers with approval workflows (v2.0)
+- **Error learning** — Structured failure analysis with similarity search (v2.0)
+- **Task lifecycle hooks** — 7 built-in hooks, 8 events, custom hooks API (v2.0)
+- **Task Deliverables** — First-class deliverable objects with type/status tracking (code, documentation, data, etc.) (v2.0)
+- **Efficient Polling** — `/api/changes?since=...` endpoint with ETag support for optimized agent polling (v2.0)
+- **Approval Delegation** — Vacation mode with scoped approval delegation and automatic routing (v2.0)
+- **OpenClaw Integration** — Direct gateway wake for real-time squad chat notifications and agent orchestration (v2.0)
+- **Reverse Proxy Ready** — Deploy behind nginx, Caddy, Traefik, or any reverse proxy with the `TRUST_PROXY` environment variable (v2.1.1)
 - **Multiple attempts** — Retry with different agents, preserve history
 - **Running indicator** — Visual feedback when agents are working
 
@@ -183,18 +181,18 @@ All gates are toggleable via `PATCH /api/settings/features` under the `enforceme
 - **Activity page** — Status history with clickable task navigation, color-coded badges, and daily summary
 - **Daily standup summary** — Generate standup reports via API or CLI (`vk summary standup`) with completed, in-progress, blocked, and upcoming sections
 - **Task Templates** — Create reusable templates with defaults, subtasks, and multi-task blueprints
-- **Documentation freshness** — Steward workflow with freshness headers and automated staleness detection (NEW — v2.0)
-- **Cost prediction** — Multi-factor cost estimation for tasks (NEW — v2.0)
+- **Documentation freshness** — Steward workflow with freshness headers and automated staleness detection (v2.0)
+- **Cost prediction** — Multi-factor cost estimation for tasks (v2.0)
 
 ### 📊 Dashboard (v2.0)
 
-- **Where Time Went** — Time breakdown by project from telemetry data (NEW — v2.0)
-- **Activity Clock** — 24-hour donut chart showing agent work patterns (NEW — v2.0)
-- **Hourly Activity** — Bar chart with event counts per hour (NEW — v2.0)
-- **Wall Time Toggle** — Total agent time + average run duration (NEW — v2.0)
-- **Session Metrics** — Session count, success rate, completion tracking (NEW — v2.0)
-- **Markdown rendering** — Rich markdown in task descriptions and comments (NEW — v2.0)
-- **Timezone-aware metrics** — Server reports local timezone; clients can request metrics in any timezone via `?tz=` (NEW — v2.0)
+- **Where Time Went** — Time breakdown by project from telemetry data (v2.0)
+- **Activity Clock** — 24-hour donut chart showing agent work patterns (v2.0)
+- **Hourly Activity** — Bar chart with event counts per hour (v2.0)
+- **Wall Time Toggle** — Total agent time + average run duration (v2.0)
+- **Session Metrics** — Session count, success rate, completion tracking (v2.0)
+- **Markdown rendering** — Rich markdown in task descriptions and comments (v2.0)
+- **Timezone-aware metrics** — Server reports local timezone; clients can request metrics in any timezone via `?tz=` (v2.0)
 - **Analytics API** — Timeline visualization and aggregate metrics (parallelism, throughput, lead time)
 
 ### 🗂️ Organization
@@ -204,10 +202,11 @@ All gates are toggleable via `PATCH /api/settings/features` under the `enforceme
 > 🎬 [Watch the task workflow demo (MP4)](assets/demo-task.mp4)
 
 - **Subtasks** — Break down complex work with progress tracking
-- **Task dependencies** — Bidirectional dependency graph (depends_on/blocks) with cycle detection, recursive tree API, and visual badges (NEW — v3.3)
-- **Crash-recovery checkpointing** — Save/resume/clear agent state with auto-sanitization of secrets, 1MB limit, 24h expiry, and sub-agent context injection (NEW — v3.3)
-- **Observational memory** — Per-task observations with importance scoring (1-10), full-text search, timeline view, and activity logging (NEW — v3.3)
-- **Agent filter** — Query tasks by agent name with `?agent=name` parameter (NEW — v3.3)
+- **Task dependencies** — Bidirectional dependency graph (depends_on/blocks) with cycle detection, recursive tree API, and visual badges (v3.3)
+- **Crash-recovery checkpointing** — Save/resume/clear agent state with auto-sanitization of secrets, 1MB limit, 24h expiry, and sub-agent context injection (v3.3)
+- **Observational memory** — Per-task observations with importance scoring (1-10), full-text search, timeline view, and activity logging (v3.3)
+- **Agent filter** — Query tasks by agent name with `?agent=name` parameter (v3.3)
+- **Sprint management** — Full sprint CRUD from CLI and MCP with suggestions engine (v3.3)
 - **Archive** — Searchable archive with one-click restore
 - **Time tracking** — Start/stop timer or manual entry
 - **Activity log** — Full history of task events
@@ -697,10 +696,37 @@ pnpm test:e2e   # E2E tests (Playwright)
 
 See the [open issues](https://github.com/BradGroux/veritas-kanban/issues) for what's next. Community contributions welcome!
 
+### Planned: v4.0 — Security & Governance
+
+The next major release focuses on **security, governance, and trust** for production agentic workflows.
+
+- [#178](https://github.com/BradGroux/veritas-kanban/issues/178) — Agent Policy & Guard Engine
+- [#179](https://github.com/BradGroux/veritas-kanban/issues/179) — Decision Audit Trail with Assumption Tracking
+- [#180](https://github.com/BradGroux/veritas-kanban/issues/180) — Agent Output Evaluation & Scoring Framework
+- [#181](https://github.com/BradGroux/veritas-kanban/issues/181) — Behavioral Drift Detection & Alerting
+- [#182](https://github.com/BradGroux/veritas-kanban/issues/182) — User Feedback Loop with Sentiment Analytics
+- [#183](https://github.com/BradGroux/veritas-kanban/issues/183) — Draggable & Resizable Dashboard Widget Grid
+- [#184](https://github.com/BradGroux/veritas-kanban/issues/184) — Prompt Template Registry with Version Control
+- [#185](https://github.com/BradGroux/veritas-kanban/issues/185) — Global System Health Status Bar
+- [#186](https://github.com/BradGroux/veritas-kanban/issues/186) — Upgrade to shadcn/ui CLI v4.0
+
 ### Backlog
 
 - [WCAG 2.1 AA accessibility](https://github.com/BradGroux/veritas-kanban/issues/1) — Full keyboard navigation, screen reader support, color contrast
 - [Example video](https://github.com/BradGroux/veritas-kanban/issues/68) — Hosted walkthrough video on YouTube or Vimeo
+
+### Shipped in v3.3.x
+
+- ~~[Task Dependencies Graph](https://github.com/BradGroux/veritas-kanban/issues/122)~~ — Bidirectional dependency model with cycle detection, recursive tree API, visual badges
+- ~~[Crash-Recovery Checkpointing](https://github.com/BradGroux/veritas-kanban/issues/123)~~ — Save/resume/clear agent state with auto-sanitization of secrets, 1MB limit, 24h expiry
+- ~~[Observational Memory](https://github.com/BradGroux/veritas-kanban/issues/124)~~ — Per-task observations with importance scoring (1-10), full-text search, timeline view
+- ~~[Agent Filter](https://github.com/BradGroux/veritas-kanban/issues/125)~~ — Query tasks by agent name with `?agent=name` parameter
+- ~~[Sprint Management CLI + MCP](https://github.com/BradGroux/veritas-kanban/issues/161)~~ — Full sprint CRUD from command line and MCP (list, create, update, delete, close, suggestions)
+- ~~[Task↔Agent State Sync](https://github.com/BradGroux/veritas-kanban/issues/155)~~ — Bi-directional sync engine keeping task state consistent with agent execution
+- ~~Orchestrator Delegation Enforcement~~ — Full enforcement gate with delegation violation reporting
+- ~~Express 5 + Vite 7 + Tailwind 4 + Zod 4 migration~~ — Major dependency upgrades
+- ~~[SSRF Webhook Protection](https://github.com/BradGroux/veritas-kanban/issues/165)~~ — Server-side request forgery safeguards
+- ~~[WebSocket Broadcast Batching](https://github.com/BradGroux/veritas-kanban/issues/167)~~ — Prevents event loop blocking under high-frequency updates
 
 ### Shipped in v3.2.0
 
