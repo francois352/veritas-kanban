@@ -27,6 +27,7 @@ import { initAgentStatus } from './routes/agent-status.js';
 import { getTelemetryService } from './services/telemetry-service.js';
 import { ConfigService } from './services/config-service.js';
 import { disposeTaskService } from './services/task-service.js';
+import { initDispatch, stopDispatch } from './services/dispatch-service.js';
 import { initBroadcast } from './services/broadcast-service.js';
 import { runStartupMigrations } from './services/migration-service.js';
 import { createBackup, runIntegrityChecks } from './services/integrity-service.js';
@@ -562,6 +563,9 @@ let configService: ConfigService | null = null;
     const featureSettings = await configService.getFeatureSettings();
     syncSettingsToServices(featureSettings);
     await getTelemetryService().init();
+
+    // 4. Initialize Redis dispatch for AI agent pipeline
+    await initDispatch();
   } catch (err) {
     log.error({ err }, 'Failed to initialize services');
   }
@@ -897,6 +901,7 @@ async function gracefulShutdown(signal: string) {
 
     // Dispose task service (closes file watchers, clears cache)
     disposeTaskService();
+    await stopDispatch();
     log.info('Task service disposed');
 
     // Dispose config service (closes file watcher, clears cache)
