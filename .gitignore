@@ -102,3 +102,5 @@ tasks/
 
 # Local security middleware (not shared)
 server/src/middleware/external-api-key.ts
+data/
+*.bak.*

@@ -51,15 +51,22 @@ export async function initDispatch(): Promise<void> {
 }
 
 /**
- * Check if an agent ID is a registered AI agent (not a human like "francois").
+ * Check if an agent ID is a registered AI agent.
+ * Uses the Veritas agent registry (dynamic) as source of truth.
+ * Bootstrap fallback: if registry is empty, reject known human IDs.
  */
 function isAiAgent(agentId: string): boolean {
-  const HUMANS = ['francois', 'admin', 'unknown'];
-  if (HUMANS.includes(agentId)) return false;
-
   const registry = getAgentRegistryService();
-  const agent = registry.get(agentId);
-  return !!agent;
+  const registeredAgents = registry.list();
+
+  // If registry has agents, use it as source of truth
+  if (registeredAgents.length > 0) {
+    return !!registry.get(agentId);
+  }
+
+  // Bootstrap fallback: registry empty, reject known human IDs
+  const KNOWN_HUMANS = ['francois', 'admin'];
+  return !KNOWN_HUMANS.includes(agentId);
 }
 
 /**
@@ -114,7 +121,25 @@ export function dispatchToAgent({
     .xAdd(STREAM_KEY, '*', msg, {
       TRIM: { strategy: 'MAXLEN', strategyModifier: '~', threshold: MAX_STREAM_LEN },
     })
-    .then(() => log.info(`Dispatched ${taskId} to ${assignee}`))
+    .then(() => {
+      log.info(`Dispatched ${taskId} to ${assignee}`);
+      // Post audit comment to task via Kanban API
+      const apiUrl = process.env.KANBAN_API_URL || 'http://localhost:3100/api/v1';
+      const apiToken = process.env.KANBAN_API_TOKEN || '';
+      if (apiUrl && apiToken) {
+        const ts = new Date().toISOString();
+        fetch(`${apiUrl}/tasks/${taskId}/comments`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${apiToken}`,
+          },
+          body: JSON.stringify({
+            text: `[dispatch] Dispatched to ${assignee} via Redis stream at ${ts}`,
+          }),
+        }).catch((e: Error) => log.warn(`Audit comment failed: ${e.message}`));
+      }
+    })
     .catch((err: Error) => log.warn(`Dispatch failed: ${err.message}`));
 }
 
