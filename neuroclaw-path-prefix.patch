@@ -1,91 +1,62 @@
+# NeuroClaw Path Prefix Patches
+# Fork-specific changes for deploying Veritas Kanban at /kanban/ sub-path.
+#
+# After upstream PR #189 (VITE_BASE_PATH support) merged 2026-03-09,
+# most path prefix patches are now handled by upstream.
+#
+# Remaining fork patches (2 files):
+# 1. Dockerfile — set default VITE_BASE_PATH=/kanban/ (upstream defaults to /)
+#                 + add VITE_API_URL build arg
+# 2. web/src/main.tsx — global fetch interceptor for raw fetch('/api/...') calls
+#                       that bypass apiFetch(). Upstream PR #189 notes that
+#                       some components still use raw fetch. This interceptor
+#                       catches those and rewrites to /kanban/api/...
+#
+# Previously patched (now handled by upstream):
+# - web/src/hooks/useWebSocket.ts (basePath for WS URL)
+# - web/src/lib/api/helpers.ts (apiFetch prefix)
+# - web/src/lib/config.ts (API_BASE with basePath)
+# - web/src/components/settings/tabs/SecurityTab.tsx (auth reset URL)
+# - web/vite.config.ts (base: VITE_BASE_PATH)
+#
+# To regenerate: git diff origin/main -- Dockerfile web/src/main.tsx
+
 diff --git a/Dockerfile b/Dockerfile
-index 8671d17..be7bd0c 100644
 --- a/Dockerfile
 +++ b/Dockerfile
-@@ -42,6 +42,11 @@ RUN pnpm --filter @veritas-kanban/shared build
- # ---------------------------------------------------------------------------
- FROM build-shared AS build-web
- 
+@@ -44,8 +44,10 @@ FROM build-shared AS build-web
+
+ # Optional: deploy under a sub-path (e.g., /kanban/) behind a reverse proxy.
+ # When set, all client-side routes and API calls are prefixed automatically.
+-ARG VITE_BASE_PATH=/
 +ARG VITE_BASE_PATH=/kanban/
 +ARG VITE_API_URL=
-+ENV VITE_BASE_PATH=${VITE_BASE_PATH}
+ ENV VITE_BASE_PATH=${VITE_BASE_PATH}
 +ENV VITE_API_URL=${VITE_API_URL}
-+
+
  COPY web/ ./web/
  RUN pnpm --filter @veritas-kanban/web build
- 
-diff --git a/web/src/components/settings/tabs/SecurityTab.tsx b/web/src/components/settings/tabs/SecurityTab.tsx
-index 8846fe0..5f9c2df 100644
---- a/web/src/components/settings/tabs/SecurityTab.tsx
-+++ b/web/src/components/settings/tabs/SecurityTab.tsx
-@@ -211,7 +211,7 @@ export function SecurityTab() {
-                   onClick={async () => {
-                     // Call the reset endpoint
-                     try {
--                      const res = await fetch('/api/auth/reset', { method: 'POST' });
-+                      const res = await fetch(`${(import.meta.env.BASE_URL || '/').replace(/\/$/, '')}/api/auth/reset`, { method: 'POST' });
-                       if (res.ok) {
-                         window.location.reload();
-                       } else {
-diff --git a/web/src/hooks/useWebSocket.ts b/web/src/hooks/useWebSocket.ts
-index 8eff20f..c64b801 100644
---- a/web/src/hooks/useWebSocket.ts
-+++ b/web/src/hooks/useWebSocket.ts
-@@ -64,7 +64,8 @@ function getDefaultWsUrl(): string {
-   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-   // Always use the same host:port as the current page for WebSocket connection
-   // This works for both dev (Vite on :5173) and production (server on :3000/:3001)
--  return `${protocol}//${window.location.host}/ws`;
-+  const basePath = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
-+  return `${protocol}//${window.location.host}${basePath}/ws`;
- }
- 
- /**
-diff --git a/web/src/lib/api/helpers.ts b/web/src/lib/api/helpers.ts
-index 7e115a2..b7e058a 100644
---- a/web/src/lib/api/helpers.ts
-+++ b/web/src/lib/api/helpers.ts
-@@ -73,7 +73,9 @@ export async function handleResponse<T>(response: Response): Promise<T> {
-  * Use this in hooks instead of raw `fetch` + `response.json()`.
-  */
- export async function apiFetch<T>(url: string, init?: RequestInit): Promise<T> {
--  const response = await fetch(url, {
-+  const base = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
-+  const fullUrl = url.startsWith("/") ? base + url : url;
-+  const response = await fetch(fullUrl, {
-     credentials: 'include',
-     ...init,
-   });
-diff --git a/web/src/lib/config.ts b/web/src/lib/config.ts
-index 05d259e..3f68fae 100644
---- a/web/src/lib/config.ts
-+++ b/web/src/lib/config.ts
-@@ -1,4 +1,5 @@
- /**
-  * Shared configuration for the application
-  */
--export const API_BASE = import.meta.env.VITE_API_URL || '/api';
-+const basePath = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
-+export const API_BASE = import.meta.env.VITE_API_URL || `${basePath}/api`;
+
 diff --git a/web/src/main.tsx b/web/src/main.tsx
-index e562a1e..bc8be18 100644
 --- a/web/src/main.tsx
 +++ b/web/src/main.tsx
-@@ -13,6 +13,24 @@ const queryClient = new QueryClient({
+@@ -13,6 +13,26 @@ const queryClient = new QueryClient({
    },
  });
- 
-+
+
 +// Rewrite /api/* fetch calls to include base path prefix (for reverse-proxy deployments)
 +const _basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
 +if (_basePath && _basePath !== '') {
 +  const _originalFetch = window.fetch;
-+  window.fetch = function(input: RequestInfo | URL, init?: RequestInit) {
++  window.fetch = function (input: RequestInfo | URL, init?: RequestInit) {
 +    if (typeof input === 'string' && input.startsWith('/api/')) {
 +      input = _basePath + input;
 +    } else if (input instanceof Request && input.url.startsWith(window.location.origin + '/api/')) {
 +      input = new Request(
-+        input.url.replace(window.location.origin + '/api/', window.location.origin + _basePath + '/api/'),
++        input.url.replace(
++          window.location.origin + '/api/',
++          window.location.origin + _basePath + '/api/'
++        ),
 +        input
 +      );
 +    }
@@ -96,15 +67,3 @@ index e562a1e..bc8be18 100644
  ReactDOM.createRoot(document.getElementById('root')!).render(
    <React.StrictMode>
      <QueryClientProvider client={queryClient}>
-diff --git a/web/vite.config.ts b/web/vite.config.ts
-index 2ac22c8..276ae40 100644
---- a/web/vite.config.ts
-+++ b/web/vite.config.ts
-@@ -15,6 +15,7 @@ const viteAllowedHosts =
-     : undefined;
- 
- export default defineConfig({
-+  base: process.env.VITE_BASE_PATH || "/",
-   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-   plugins: [react(), tailwindcss() as any],
-   resolve: {
