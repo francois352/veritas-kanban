@@ -17,6 +17,7 @@ import type {
 import { getWorkflowRunsDir } from '../utils/paths.js';
 import { createLogger } from '../lib/logger.js';
 import { getToolPolicyService } from './tool-policy-service.js';
+import { dispatchToAgent } from './dispatch-service.js';
 
 const log = createLogger('workflow-step-executor');
 
@@ -130,25 +131,46 @@ export class WorkflowStepExecutor {
     //   await this.cleanupSession(sessionKey);
     // }
 
-    // Placeholder: Simulate agent execution (Phase 1 only)
-    const result = `Agent ${step.agent} (role: ${agentDef?.role || 'unknown'}) executed step ${step.id}\n\nSession Config:\n- Mode: ${sessionConfig.mode}\n- Context: ${sessionConfig.context}\n- Cleanup: ${sessionConfig.cleanup}\n- Timeout: ${sessionConfig.timeout}s\n\nTool Policy:\n- Allowed: ${toolPolicyFilter.allowed?.join(', ') || 'all'}\n- Denied: ${toolPolicyFilter.denied?.join(', ') || 'none'}\n\nPrompt:\n${prompt}\n\nSTATUS: done\nOUTPUT: Placeholder result`;
-
-    // Parse output
-    const parsed = this.parseStepOutput(result, step);
-
-    // Validate acceptance criteria
-    await this.validateAcceptanceCriteria(step, result, parsed);
-
-    // Write output to step-outputs/
-    const outputPath = await this.saveStepOutput(run.id, step.id, result);
-
-    // Append to progress file (#108)
-    await this.appendProgressFile(run.id, step.id, result);
-
-    return {
-      output: parsed,
-      outputPath,
+    // Map workflow agent role to kanban agent ID
+    const agentIdMap: Record<string, string> = {
+      planner: 'claude-code',
+      developer: 'codex',
+      reviewer: 'gemini',
     };
+    const kanbanAgentId = agentIdMap[step.agent || ''] || step.agent || '';
+
+    // Dispatch to agent via Redis stream
+    dispatchToAgent({
+      taskId: run.taskId || run.id,
+      title: `[workflow:${run.workflowId}] Step: ${step.name || step.id}`,
+      description: prompt,
+      assignee: kanbanAgentId,
+      priority: 'high',
+      constraints: [
+        `workflow_run_id:${run.id}`,
+        `workflow_step_id:${step.id}`,
+        `workflow_id:${run.workflowId}`,
+      ],
+    });
+
+    log.info(
+      { runId: run.id, stepId: step.id, agent: kanbanAgentId },
+      'Agent step dispatched via Redis — blocking until agent completes'
+    );
+
+    // Write dispatch record to step-outputs/
+    const dispatchRecord = `Agent ${kanbanAgentId} dispatched for step ${step.id}\nRun: ${run.id}\nPrompt: ${prompt}\n\nSTATUS: dispatched\nAwaiting agent completion via POST /api/v1/workflow-runs/${run.id}/steps/${step.id}/complete`;
+    const outputPath = await this.saveStepOutput(run.id, step.id, dispatchRecord);
+    await this.appendProgressFile(run.id, step.id, dispatchRecord);
+
+    // Throw dispatch error to trigger blocked state in run service
+    // The error message prefix "DISPATCH:" signals this is not a failure
+    // but an intentional pause waiting for async agent completion
+    const err = new Error(
+      `DISPATCH: Step ${step.id} dispatched to ${kanbanAgentId}. Resume via POST /api/v1/workflow-runs/${run.id}/steps/${step.id}/complete`
+    );
+    (err as any).isDispatch = true;
+    throw err;
   }
 
   /**
