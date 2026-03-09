@@ -1417,9 +1417,14 @@ export class TaskService {
   }
 
   /**
-   * Check if adding a dependency would create a cycle
-   * Performs DFS to detect cycles, traversing BOTH depends_on and blocks relationships
-   * Uses batch loading to avoid N+1 queries
+   * Check if adding a dependency would create a cycle.
+   * Performs DFS traversing only `depends_on` edges (the canonical direction).
+   *
+   * `blocks` is the reverse pointer of `depends_on` — they represent the same
+   * relationship. Traversing both would cause every new dependency to appear as
+   * a cycle, because A depends_on B immediately implies B blocks A.
+   *
+   * Uses batch loading to avoid N+1 queries.
    */
   private async checkForCycle(startId: string, targetId: string): Promise<boolean> {
     // Load all tasks once for batch processing (performance optimization)
@@ -1448,12 +1453,10 @@ export class TaskService {
         continue;
       }
 
-      // Traverse BOTH depends_on and blocks relationships
-      // A cycle can occur through either relationship type
-      const nextIds = [
-        ...(currentTask.dependencies.depends_on || []),
-        ...(currentTask.dependencies.blocks || []),
-      ];
+      // Only traverse depends_on edges — the canonical dependency direction.
+      // blocks is the reverse pointer and must NOT be followed here, otherwise
+      // every A→depends_on→B + B→blocks→A pair looks like a cycle.
+      const nextIds = currentTask.dependencies.depends_on || [];
 
       for (const nextId of nextIds) {
         if (!visited.has(nextId)) {
