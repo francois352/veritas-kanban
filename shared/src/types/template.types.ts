@@ -80,3 +80,43 @@ export interface UpdateTemplateInput {
   subtaskTemplates?: SubtaskTemplate[];
   blueprint?: BlueprintTask[];
 }
+
+/** Template Version for Prompt Templates */
+export interface TemplateVersion {
+  version: number;
+  content: string;
+  changelog: string;
+  createdAt: string;
+}
+
+/** Prompt Template */
+export interface PromptTemplate {
+  id: string;
+  name: string;
+  description?: string;
+  content: string;
+  variables: string[];
+  version: number;
+  versions: TemplateVersion[];
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** Input for creating a new Prompt Template */
+export interface CreatePromptTemplateInput {
+  name: string;
+  description?: string;
+  content: string;
+  changelog?: string;
+  tags?: string[];
+}
+
+/** Input for updating a Prompt Template */
+export interface UpdatePromptTemplateInput {
+  name?: string;
+  description?: string;
+  content?: string;
+  changelog?: string;
+  tags?: string[];
+}

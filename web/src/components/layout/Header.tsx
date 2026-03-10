@@ -8,6 +8,7 @@ import {
   Sun,
   Moon,
   FileText,
+  Sparkles,
   Users,
   Workflow,
 } from 'lucide-react';
@@ -118,6 +119,15 @@ export function Header() {
               title="Templates"
             >
               <FileText className="h-4 w-4" aria-hidden="true" />
+            </Button>
+            <Button
+              variant={view === 'prompt-templates' ? 'secondary' : 'ghost'}
+              size="icon"
+              onClick={() => setView(view === 'prompt-templates' ? 'board' : 'prompt-templates')}
+              aria-label="Prompt Templates"
+              title="Prompt Templates"
+            >
+              <Sparkles className="h-4 w-4" aria-hidden="true" />
             </Button>
             <Button
               variant={view === 'workflows' ? 'secondary' : 'ghost'}

@@ -139,7 +139,7 @@ describe('Detail mutation cache patching (no full-list invalidation)', () => {
    * 3. invalidateQueries was NOT called with ['tasks'] (no full refetch)
    */
   async function assertPatchOnly(
-    hookFn: () => ReturnType<typeof useAddSubtask>,
+    hookFn: () => any,
     mutateArgs: unknown
   ) {
     const { result } = renderHook(hookFn, { wrapper: makeWrapper(qc) });
@@ -161,7 +161,7 @@ describe('Detail mutation cache patching (no full-list invalidation)', () => {
     expect(individualCache).toEqual(updatedTask);
 
     // invalidateQueries should NOT have been called with ['tasks']
-    const tasksInvalidations = invalidateSpy.mock.calls.filter((call) => {
+    const tasksInvalidations = invalidateSpy.mock.calls.filter((call: any[]) => {
       const key = (call[0] as { queryKey?: unknown })?.queryKey;
       return Array.isArray(key) && key.length === 1 && key[0] === 'tasks';
     });
