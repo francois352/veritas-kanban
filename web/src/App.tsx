@@ -42,6 +42,12 @@ const TemplatesPage = lazy(() =>
   }))
 );
 
+const PromptTemplatesPage = lazy(() =>
+  import('./pages/templates').then((mod) => ({
+    default: mod.TemplatesPage,
+  }))
+);
+
 const WorkflowsPage = lazy(() =>
   import('./components/workflows/WorkflowsPage').then((mod) => ({
     default: mod.WorkflowsPage,
@@ -107,6 +113,20 @@ function MainContent() {
         }
       >
         <TemplatesPage onBack={() => setView('board')} />
+      </Suspense>
+    );
+  }
+
+  if (view === 'prompt-templates') {
+    return (
+      <Suspense
+        fallback={
+          <div className="flex items-center justify-center py-16">
+            <span className="text-muted-foreground">Loading prompt templates…</span>
+          </div>
+        }
+      >
+        <PromptTemplatesPage onBack={() => setView('board')} />
       </Suspense>
     );
   }
