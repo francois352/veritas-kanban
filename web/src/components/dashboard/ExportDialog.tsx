@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { API_BASE } from '@/lib/config';
 import {
   Dialog,
   DialogContent,
@@ -81,7 +80,7 @@ export function ExportDialog({
       }
       
       // Fetch the export
-      const response = await fetch(`${API_BASE}/telemetry/export?${params}`);
+      const response = await fetch(`/api/telemetry/export?${params}`);
       
       if (!response.ok) {
         throw new Error('Export failed');

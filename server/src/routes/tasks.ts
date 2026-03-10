@@ -16,7 +16,6 @@ import { setLastModified } from '../middleware/cache-control.js';
 import { sanitizeTaskFields } from '../utils/sanitize.js';
 import { auditLog } from '../services/audit-service.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
-import { dispatchToAgent } from '../services/dispatch-service.js';
 
 const router: RouterType = Router();
 const taskService = getTaskService();
@@ -586,18 +585,6 @@ router.post(
       details: { title: task.title, type: task.type, priority: task.priority },
     });
 
-    // Dispatch to AI agent via Redis Streams (fire-and-forget)
-    const authReqCreate = req as AuthenticatedRequest;
-    dispatchToAgent({
-      taskId: task.id,
-      title: task.title,
-      description: task.description,
-      assignee: task.agent || '',
-      priority: task.priority,
-      project: task.project,
-      origin: authReqCreate.auth?.keyName === task.agent ? 'agent' : undefined,
-    });
-
     res.status(201).json(task);
   })
 );
@@ -746,20 +733,6 @@ router.patch(
       }
     } else {
       await activityService.logActivity('task_updated', task.id, task.title, undefined, task.agent);
-    }
-
-    // Dispatch on reassignment to AI agent (fire-and-forget)
-    if (input.agent && oldTask.agent !== input.agent) {
-      const authReqPatch = req as AuthenticatedRequest;
-      dispatchToAgent({
-        taskId: task.id,
-        title: task.title,
-        description: task.description,
-        assignee: input.agent,
-        priority: task.priority,
-        project: task.project,
-        origin: authReqPatch.auth?.keyName === input.agent ? 'agent' : undefined,
-      });
     }
 
     res.json(task);

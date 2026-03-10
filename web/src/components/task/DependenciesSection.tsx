@@ -1,5 +1,4 @@
 import { useState, useMemo, useRef } from 'react';
-import { API_BASE } from '@/lib/config';
 import { Plus, X, Ban, CheckCircle2, Link as LinkIcon } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -72,7 +71,7 @@ export function DependenciesSection({
 
   const handleAddDependency = async (targetId: string, type: 'depends_on' | 'blocks') => {
     try {
-      const response = await fetch(`${API_BASE}/tasks/${task.id}/dependencies`, {
+      const response = await fetch(`/api/tasks/${task.id}/dependencies`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ [type]: targetId }),
@@ -112,7 +111,7 @@ export function DependenciesSection({
 
   const handleRemoveDependency = async (targetId: string) => {
     try {
-      const response = await fetch(`${API_BASE}/tasks/${task.id}/dependencies/${targetId}`, {
+      const response = await fetch(`/api/tasks/${task.id}/dependencies/${targetId}`, {
         method: 'DELETE',
       });
 

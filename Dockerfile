@@ -42,13 +42,6 @@ RUN pnpm --filter @veritas-kanban/shared build
 # ---------------------------------------------------------------------------
 FROM build-shared AS build-web
 
-# Optional: deploy under a sub-path (e.g., /kanban/) behind a reverse proxy.
-# When set, all client-side routes and API calls are prefixed automatically.
-ARG VITE_BASE_PATH=/kanban/
-ARG VITE_API_URL=
-ENV VITE_BASE_PATH=${VITE_BASE_PATH}
-ENV VITE_API_URL=${VITE_API_URL}
-
 COPY web/ ./web/
 RUN pnpm --filter @veritas-kanban/web build
 

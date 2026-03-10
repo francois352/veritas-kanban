@@ -1351,22 +1351,6 @@ export class TaskService {
     // Update target first, then the task itself
     await this.updateTask(targetId, { dependencies: targetDependencies });
 
-    // Re-check for cycle immediately before final write (race condition mitigation)
-    // This catches the case where another request added a conflicting dependency
-    // between our initial check and now
-    const finalCycleCheck =
-      type === 'depends_on'
-        ? await this.checkForCycle(targetId, taskId)
-        : await this.checkForCycle(taskId, targetId);
-
-    if (finalCycleCheck) {
-      // Rollback the target task update
-      await this.updateTask(targetId, { dependencies: targetTask.dependencies });
-      throw new ValidationError(
-        'Adding this dependency would create a cycle (detected during final check)'
-      );
-    }
-
     return (await this.updateTask(taskId, { dependencies })) as Task;
   }
 

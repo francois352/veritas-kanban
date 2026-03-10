@@ -6,7 +6,6 @@
  */
 
 import { useState, useEffect } from 'react';
-import { API_BASE } from '@/lib/config';
 import { useToast } from '@/hooks/useToast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -48,7 +47,7 @@ export function ToolPoliciesTab() {
   const fetchPolicies = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE}/tool-policies`);
+      const response = await fetch('/api/tool-policies');
       const result = await response.json();
       if (result.success) {
         setPolicies(result.data);
@@ -155,7 +154,7 @@ export function ToolPoliciesTab() {
     }
 
     try {
-      const response = await fetch(`${API_BASE}/tool-policies/${role}`, {
+      const response = await fetch(`/api/tool-policies/${role}`, {
         method: 'DELETE',
       });
 

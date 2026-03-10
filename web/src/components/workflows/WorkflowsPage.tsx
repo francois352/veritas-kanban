@@ -9,7 +9,6 @@
  */
 
 import { useState, useMemo, useEffect } from 'react';
-import { API_BASE } from '@/lib/config';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -45,7 +44,7 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
   useEffect(() => {
     const fetchWorkflows = async () => {
       try {
-        const response = await fetch(`${API_BASE}/workflows`);
+        const response = await fetch('/api/workflows');
         if (!response.ok) throw new Error('Failed to fetch workflows');
         const json = await response.json();
         setWorkflows(json.data ?? json);
@@ -74,7 +73,7 @@ export function WorkflowsPage({ onBack }: WorkflowsPageProps) {
 
   const handleStartRun = async (workflowId: string) => {
     try {
-      const response = await fetch(`${API_BASE}/workflows/${workflowId}/runs`, {
+      const response = await fetch(`/api/workflows/${workflowId}/runs`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({}),

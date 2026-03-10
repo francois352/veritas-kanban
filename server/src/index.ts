@@ -27,7 +27,6 @@ import { initAgentStatus } from './routes/agent-status.js';
 import { getTelemetryService } from './services/telemetry-service.js';
 import { ConfigService } from './services/config-service.js';
 import { disposeTaskService } from './services/task-service.js';
-import { initDispatch, stopDispatch } from './services/dispatch-service.js';
 import { initBroadcast } from './services/broadcast-service.js';
 import { runStartupMigrations } from './services/migration-service.js';
 import { createBackup, runIntegrityChecks } from './services/integrity-service.js';
@@ -295,10 +294,9 @@ const buildDefaultDevOrigins = (): string[] => {
     hosts.add(configuredHost);
   }
 
-  const serverPort = process.env.PORT || '3001';
   const origins: string[] = [];
   for (const host of hosts) {
-    origins.push(`http://${host}:5173`, `http://${host}:3000`, `http://${host}:${serverPort}`);
+    origins.push(`http://${host}:5173`, `http://${host}:3000`);
   }
 
   return origins;
@@ -319,26 +317,10 @@ const corsOptions: cors.CorsOptions = {
 
     if (ALLOWED_ORIGINS.includes(normalizeOrigin(origin))) {
       callback(null, true);
-      return;
+    } else {
+      log.warn({ origin }, 'CORS blocked request from disallowed origin');
+      callback(new AppError(403, 'Origin not allowed by CORS', 'CORS_REJECTED'));
     }
-
-    // In dev mode, allow any localhost/127.0.0.1 origin (any port).
-    // Mirrors the WebSocket origin validation logic in auth.ts
-    const isDev = process.env.NODE_ENV !== 'production';
-    if (isDev) {
-      try {
-        const url = new URL(origin);
-        if (url.hostname === 'localhost' || url.hostname === '127.0.0.1') {
-          callback(null, true);
-          return;
-        }
-      } catch {
-        // invalid origin URL — fall through to rejection
-      }
-    }
-
-    log.warn({ origin }, 'CORS blocked request from disallowed origin');
-    callback(new AppError(403, 'Origin not allowed by CORS', 'CORS_REJECTED'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
@@ -563,9 +545,6 @@ let configService: ConfigService | null = null;
     const featureSettings = await configService.getFeatureSettings();
     syncSettingsToServices(featureSettings);
     await getTelemetryService().init();
-
-    // 4. Initialize Redis dispatch for AI agent pipeline
-    await initDispatch();
   } catch (err) {
     log.error({ err }, 'Failed to initialize services');
   }
@@ -901,7 +880,6 @@ async function gracefulShutdown(signal: string) {
 
     // Dispose task service (closes file watchers, clears cache)
     disposeTaskService();
-    await stopDispatch();
     log.info('Task service disposed');
 
     // Dispose config service (closes file watcher, clears cache)

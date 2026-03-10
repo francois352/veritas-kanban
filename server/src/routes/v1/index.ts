@@ -73,7 +73,6 @@ import delegationRoutes from '../delegation.js';
 import { workflowRoutes } from '../workflows.js';
 import toolPolicyRoutes from '../tool-policies.js';
 import { integrationsRoutes } from '../integrations.js';
-import { systemHealthRouter } from '../system-health.js';
 
 const v1Router: IRouter = Router();
 
@@ -162,6 +161,5 @@ v1Router.use('/delegation', delegationRoutes);
 v1Router.use('/workflows', workflowRoutes);
 v1Router.use('/tool-policies', toolPolicyRoutes);
 v1Router.use('/integrations', integrationsRoutes);
-v1Router.use('/system/health', systemHealthRouter);
 
 export { v1Router };

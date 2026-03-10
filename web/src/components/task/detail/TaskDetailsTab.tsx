@@ -1,4 +1,3 @@
-import { API_BASE } from '@/lib/config';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { MarkdownEditor } from '@/components/ui/MarkdownEditor';
@@ -137,7 +136,7 @@ export function TaskDetailsTab({
                   aria-label="Clear checkpoint and discard saved progress"
                   onClick={async () => {
                     try {
-                      await fetch(`${API_BASE}/tasks/${task.id}/checkpoint`, { method: 'DELETE' });
+                      await fetch(`/api/tasks/${task.id}/checkpoint`, { method: 'DELETE' });
                       onUpdate('checkpoint', undefined);
                     } catch (error) {
                       console.error('Failed to clear checkpoint:', error);

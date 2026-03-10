@@ -10,7 +10,6 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { API_BASE } from '@/lib/config';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -90,7 +89,7 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
   // Fetch run details
   const fetchRun = useCallback(async () => {
     try {
-      const response = await fetch(`${API_BASE}/workflows/runs/${runId}`);
+      const response = await fetch(`/api/workflows/runs/${runId}`);
       if (!response.ok) throw new Error('Failed to fetch workflow run');
       const json = await response.json();
       setRun(json.data ?? json);
@@ -119,7 +118,7 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
     let isCancelled = false;
     const fetchWorkflow = async () => {
       try {
-        const workflowResponse = await fetch(`${API_BASE}/workflows/${run.workflowId}`);
+        const workflowResponse = await fetch(`/api/workflows/${run.workflowId}`);
         if (!workflowResponse.ok) throw new Error('Failed to fetch workflow definition');
         const json = await workflowResponse.json();
         if (!isCancelled) {
@@ -162,7 +161,7 @@ export function WorkflowRunView({ runId, onBack }: WorkflowRunViewProps) {
 
   const handleResume = async () => {
     try {
-      const response = await fetch(`${API_BASE}/workflows/runs/${runId}/resume`, {
+      const response = await fetch(`/api/workflows/runs/${runId}/resume`, {
         method: 'POST',
       });
 
