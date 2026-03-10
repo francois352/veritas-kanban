@@ -1,6 +1,6 @@
 import fs from 'fs/promises';
 import path from 'path';
-import { extractText as unpdfExtract } from 'unpdf';
+import { extractText } from 'unpdf';
 import mammoth from 'mammoth';
 import ExcelJS from 'exceljs';
 import { createLogger } from '../lib/logger.js';
@@ -97,7 +97,7 @@ export class TextExtractionService {
   private async extractPDF(filepath: string): Promise<string | null> {
     try {
       const buffer = await fs.readFile(filepath);
-      const { text } = await unpdfExtract(buffer, { mergePages: true });
+      const { text } = await extractText(buffer, { mergePages: true });
       return text || null;
     } catch (error) {
       log.error({ err: error }, 'PDF extraction error');
