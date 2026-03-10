@@ -200,3 +200,8 @@ export function getWorkflowRunsDir(): string {
 export function getToolPoliciesDir(): string {
   return path.join(getRuntimeDir(), 'tool-policies');
 }
+
+/** Absolute path to the policies directory. */
+export function getPoliciesDir(): string {
+  return path.join(getStorageRoot(), 'policies');
+}
