@@ -1,5 +1,5 @@
 import expressRateLimit from 'express-rate-limit';
-import type { Request } from 'express';
+import type { Request, Response } from 'express';
 
 /**
  * Rate limiting middleware using express-rate-limit.
@@ -61,7 +61,7 @@ export function rateLimit(
     limit?: number;
     windowMs?: number;
     message?: string;
-    skip?: (req: Request) => boolean;
+    skip?: (req: Request, res: Response) => boolean | Promise<boolean>;
   } = {}
 ) {
   const {
