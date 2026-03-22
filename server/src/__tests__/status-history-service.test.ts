@@ -20,9 +20,7 @@ describe('StatusHistoryService', () => {
     await fs.mkdir(configDir, { recursive: true });
     historyFile = path.join(configDir, 'status-history.json');
 
-    // Create service and override private fields
-    service = new StatusHistoryService();
-    (service as any).historyFile = historyFile;
+    service = new StatusHistoryService({ historyFile });
   });
 
   afterEach(async () => {
