@@ -96,7 +96,7 @@ COPY --from=build-web /app/web/dist ./web/dist
 # Note: services resolve .veritas-kanban from both cwd/.. and cwd directly,
 # so we create it at /app/ level AND ensure server/ is writable for services
 # that use process.cwd()/.veritas-kanban when WORKDIR is /app/server
-RUN mkdir -p /app/data /app/data/storage /app/.veritas-kanban /app/tasks && \
+RUN mkdir -p /app/data /app/data/storage /app/data/storage/decisions /app/.veritas-kanban /app/tasks && \
     chown -R veritas:nodejs /app/data /app/.veritas-kanban /app/tasks /app/server
 
 # Switch to non-root user
