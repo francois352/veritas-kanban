@@ -10,7 +10,7 @@ Built for developers who want a visual Kanban board that works with autonomous c
 
 [![CI](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml/badge.svg)](https://github.com/BradGroux/veritas-kanban/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-3.3.3-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-4.0.0-blue.svg)](CHANGELOG.md)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.7-blue.svg)](https://www.typescriptlang.org/)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
@@ -59,14 +59,17 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 
 ## 📚 Documentation Map
 
-- [MCP Server Guide](docs/mcp/README.md) — 26 tools, architecture, quickstart, tool catalog, security model, troubleshooting.
+- [MCP Server Guide](docs/mcp/README.md) — 33+ tools, architecture, quickstart, tool catalog, security model, troubleshooting.
 - [API Reference](docs/API-REFERENCE.md) — Auth, endpoints, request/response examples, WebSocket, common workflows.
+- [Self-Hosting Guide](docs/guides/SELF_HOST.md) — production deployment, reverse proxy, auth hardening, Docker, and backups.
 - [Getting Started Guide](docs/GETTING-STARTED.md) — zero ➝ agent-ready in 5 minutes, plus sanity checks and prompt registry tips.
 - [Agent Task Workflow SOP](docs/SOP-agent-task-workflow.md) — lifecycle, API/CLI snippets, prompts.
 - [Squad Chat Protocol](docs/SQUAD-CHAT-PROTOCOL.md) — agent messaging, system events (spawned/completed/failed), model attribution, and helper scripts.
 - [Sprint Planning SOP](docs/SOP-sprint-planning.md) — epic → sprint → task breakdown.
 - [Multi-Agent Orchestration](docs/SOP-multi-agent-orchestration.md) — PM + worker handoffs.
 - [Cross-Model Code Review](docs/SOP-cross-model-code-review.md) — enforce Claude ↔ GPT reviews.
+- [Agent Governance SOPs](docs/) — [Policy engine](docs/SOP-agent-policy-engine.md), [drift detection](docs/SOP-behavioral-drift-detection.md), [decision audit](docs/SOP-decision-audit-trail.md), [output evaluation](docs/SOP-output-evaluation.md), [user feedback](docs/SOP-user-feedback.md).
+- [Operational SOPs](docs/) — [Broadcasts](docs/SOP-broadcasts.md), [delegation](docs/SOP-delegation.md), [deliverables](docs/SOP-deliverables.md), [prompt registry](docs/SOP-prompt-registry.md), [squad chat](docs/SOP-squad-chat.md), [system health](docs/SOP-system-health-monitoring.md).
 - [Best Practices](docs/BEST-PRACTICES.md) & [Tips + Tricks](docs/TIPS-AND-TRICKS.md) — patterns, shortcuts, integrations.
 - [Real-World Examples](docs/EXAMPLES-agent-workflows.md) — copy/pasteable agent recipes.
 - [Troubleshooting](docs/TROUBLESHOOTING.md) — deeper diagnostics when things wobble.
@@ -100,11 +103,23 @@ Open [http://localhost:3000](http://localhost:3000) — that's it. The board aut
 
 ## ✨ Feature Highlights
 
+### 🛡️ Agent Governance (New in v4.0)
+
+**Policy Engine** — Define what agents can and can't do. Configurable tool/action policies with `allow`, `deny`, and `require-approval` guard rules. Every policy decision is logged. **Decision Audit Trail** — Log agent decisions with confidence scores, supporting evidence, and stated assumptions. Record outcomes afterward to see whether assumptions held. **Behavioral Drift Detection** — Set metric baselines and thresholds; get alerted when an agent's behavior deviates. **User Feedback Loop** — Collect feedback on agent outputs with sentiment tagging and category analytics. **Output Evaluation** — Score agent outputs against weighted criteria profiles (regex, keyword, numeric range, custom expressions).
+
 ### 🤖 Agent Orchestration
 
 Spawn autonomous coding agents on tasks. Track them in real-time with the multi-agent dashboard — status indicators, expandable agent cards, model attribution. Squad Chat gives agents a shared communication channel with system lifecycle events (spawned, completed, failed). Assign multiple agents per task, set permission levels (Intern/Specialist/Lead), and let them coordinate.
 
 ![Agent orchestration](assets/demo-overview.gif)
+
+### 📊 Customizable Dashboard (New in v4.0)
+
+**Draggable & Resizable Widget Grid** — Rearrange and resize dashboard widgets via drag-and-drop. Layouts persist across sessions. Add widgets from the library or remove ones you don't need. **Global System Health Bar** — Persistent header status bar with five health levels (stable → alert) across three signal categories: system resources, agent availability, and operation success rate.
+
+### 📝 Prompt Template Registry (New in v4.0)
+
+Version-controlled prompt templates with variable extraction, full version history with rollback, usage tracking, and preview rendering with sample variable injection. Manage your prompt library the same way you manage code.
 
 ### ⚡ Workflow Engine
 
@@ -126,7 +141,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 
 ### 🔌 Three Integration Surfaces
 
-- **MCP Server** — 26 tools across 6 categories via Model Context Protocol
+- **MCP Server** — 33+ tools across 7 categories via Model Context Protocol (v4.0 adds project management and comment CRUD)
 - **CLI** — `vk begin <id>` / `vk done <id> "summary"` replaces 6 API calls with 2 commands
 - **REST API** — Full lifecycle management. If it can make HTTP calls, it can drive the board.
 
@@ -245,7 +260,7 @@ Tasks are markdown files. Settings are JSON. Workflows are YAML. No database, no
 #### Integration
 
 - **CLI** — `vk` command for terminal workflows
-- **MCP Server** — 26 tools across 6 categories via Model Context Protocol
+- **MCP Server** — 33+ tools across 7 categories via Model Context Protocol
 - **Notifications** — Teams integration for task updates
 
 </details>
@@ -282,7 +297,7 @@ Veritas Kanban is neither. It's the **visual command center for agentic work** �
 | **YAML workflow pipelines**     |      ✅ Loops, gates, parallel      |     ⚠️ Code-defined only     |          ❌           |
 | **Real-time agent dashboard**   |    ✅ Status, model attribution     |              ❌              |          ❌           |
 | **Agent communication**         | ✅ Squad Chat with lifecycle events |       ⚠️ Internal only       |          ❌           |
-| **MCP server**                  |             ✅ 26 tools             |              ❌              |          ❌           |
+| **MCP server**                  |            ✅ 33+ tools             |              ❌              |          ❌           |
 | **CLI**                         |          ✅ Full lifecycle          |              ❌              |      ⚠️ Limited       |
 | **Git worktrees + code review** |             ✅ Built-in             |              ❌              |          ❌           |
 | **Task persistence**            |          ✅ Markdown files          |         ❌ In-memory         |      ✅ Database      |
@@ -578,7 +593,7 @@ vk agents:pending
 
 ## 🔗 MCP Server
 
-26 tools across 6 categories (tasks, agents, automation, notifications, summaries, sprints) via [Model Context Protocol](https://modelcontextprotocol.io/).
+33+ tools across 7 categories (tasks, agents, automation, notifications, summaries, sprints, projects) via [Model Context Protocol](https://modelcontextprotocol.io/).
 
 **→ [Full MCP documentation](docs/mcp/README.md)** — architecture, quickstart, tool catalog with examples, security model, and troubleshooting.
 
@@ -658,17 +673,19 @@ pnpm test:e2e   # E2E tests (Playwright)
 
 ## 📚 Documentation
 
-| Document                                   | Description                      |
-| ------------------------------------------ | -------------------------------- |
-| [Features](docs/FEATURES.md)               | Complete feature reference       |
-| [CLI Guide](docs/CLI-GUIDE.md)             | Comprehensive CLI usage guide    |
-| [Deployment](docs/DEPLOYMENT.md)           | Docker, bare metal, env config   |
-| [Troubleshooting](docs/TROUBLESHOOTING.md) | Common issues & solutions        |
-| [Contributing](CONTRIBUTING.md)            | How to contribute, PR guidelines |
-| [Security Policy](SECURITY.md)             | Vulnerability reporting          |
-| [Code of Conduct](CODE_OF_CONDUCT.md)      | Community guidelines             |
-| [Changelog](CHANGELOG.md)                  | Release history                  |
-| [Sprint Docs](docs/)                       | Sprint planning & audit reports  |
+| Document                                       | Description                                  |
+| ---------------------------------------------- | -------------------------------------------- |
+| [Features](docs/FEATURES.md)                   | Complete feature reference                   |
+| [API Reference](docs/API-REFERENCE.md)         | Auth, endpoints, WebSocket docs              |
+| [CLI Guide](docs/CLI-GUIDE.md)                 | Comprehensive CLI usage guide                |
+| [Self-Hosting Guide](docs/guides/SELF_HOST.md) | Production deployment, reverse proxy, Docker |
+| [Deployment](docs/DEPLOYMENT.md)               | Docker, bare metal, env config               |
+| [Troubleshooting](docs/TROUBLESHOOTING.md)     | Common issues & solutions                    |
+| [Contributing](CONTRIBUTING.md)                | How to contribute, PR guidelines             |
+| [Security Policy](SECURITY.md)                 | Vulnerability reporting                      |
+| [Code of Conduct](CODE_OF_CONDUCT.md)          | Community guidelines                         |
+| [Changelog](CHANGELOG.md)                      | Release history                              |
+| [Sprint Docs](docs/)                           | Sprint planning & audit reports              |
 
 ---
 
@@ -729,19 +746,17 @@ pnpm test:e2e   # E2E tests (Playwright)
 
 See the [open issues](https://github.com/BradGroux/veritas-kanban/issues) for what's next. Community contributions welcome!
 
-### Planned: v4.0 — Security & Governance
+### Shipped in v4.0.0
 
-The next major release focuses on **security, governance, and trust** for production agentic workflows.
-
-- [#178](https://github.com/BradGroux/veritas-kanban/issues/178) — Agent Policy & Guard Engine
-- [#179](https://github.com/BradGroux/veritas-kanban/issues/179) — Decision Audit Trail with Assumption Tracking
-- [#180](https://github.com/BradGroux/veritas-kanban/issues/180) — Agent Output Evaluation & Scoring Framework
-- [#181](https://github.com/BradGroux/veritas-kanban/issues/181) — Behavioral Drift Detection & Alerting
-- [#182](https://github.com/BradGroux/veritas-kanban/issues/182) — User Feedback Loop with Sentiment Analytics
-- [#183](https://github.com/BradGroux/veritas-kanban/issues/183) — Draggable & Resizable Dashboard Widget Grid
-- [#184](https://github.com/BradGroux/veritas-kanban/issues/184) — Prompt Template Registry with Version Control
-- [#185](https://github.com/BradGroux/veritas-kanban/issues/185) — Global System Health Status Bar
-- [#186](https://github.com/BradGroux/veritas-kanban/issues/186) — Upgrade to shadcn/ui CLI v4.0
+- ~~[#178](https://github.com/BradGroux/veritas-kanban/issues/178) — Agent Policy & Guard Engine~~ — Configurable tool/action policies with allow/deny/require-approval guard rules
+- ~~[#179](https://github.com/BradGroux/veritas-kanban/issues/179) — Decision Audit Trail with Assumption Tracking~~ — Log decisions with confidence scores, evidence, and outcome tracking
+- ~~[#180](https://github.com/BradGroux/veritas-kanban/issues/180) — Agent Output Evaluation & Scoring Framework~~ — Weighted criteria profiles with composite scoring
+- ~~[#181](https://github.com/BradGroux/veritas-kanban/issues/181) — Behavioral Drift Detection & Alerting~~ — Metric baselines with configurable alert thresholds
+- ~~[#182](https://github.com/BradGroux/veritas-kanban/issues/182) — User Feedback Loop with Sentiment Analytics~~ — Feedback collection with sentiment tagging and aggregate analytics
+- ~~[#183](https://github.com/BradGroux/veritas-kanban/issues/183) — Draggable & Resizable Dashboard Widget Grid~~ — Drag-and-drop layout with persistence
+- ~~[#184](https://github.com/BradGroux/veritas-kanban/issues/184) — Prompt Template Registry with Version Control~~ — Versioned templates with rollback and usage tracking
+- ~~[#185](https://github.com/BradGroux/veritas-kanban/issues/185) — Global System Health Status Bar~~ — Five health levels across system, agents, and operations signals
+- ~~[#186](https://github.com/BradGroux/veritas-kanban/issues/186) — Upgrade to shadcn/ui CLI v4.0~~ — All components updated with Tailwind v4 integration
 
 ### Backlog
 
