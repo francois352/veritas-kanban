@@ -7,7 +7,6 @@ This document outlines the manual integration steps required to complete feature
 **Action:** Export the new prompt registry types
 
 Add these lines to the exports:
-
 ```typescript
 // Prompt Registry Types
 export type {
@@ -42,10 +41,9 @@ app.use('/api/prompt-registry', promptRegistryRouter);
 **Location:** Find where other routes like `templates`, `tasks`, `chat` are registered. Add the prompt registry route in the same pattern.
 
 **Expected pattern:**
-
 ```typescript
 app.use('/api/templates', templateRouter);
-app.use('/api/prompt-registry', promptRegistryRouter); // <-- Add this line
+app.use('/api/prompt-registry', promptRegistryRouter);  // <-- Add this line
 app.use('/api/tasks', taskRouter);
 ```
 
@@ -162,7 +160,6 @@ These files are complete and require no further changes:
 ## Questions?
 
 Refer to reference implementations:
-
 - **Template pattern:** `server/src/services/template-service.ts`
 - **Route pattern:** `server/src/routes/templates.ts`
 - **API client pattern:** `web/src/lib/api/entities.ts`

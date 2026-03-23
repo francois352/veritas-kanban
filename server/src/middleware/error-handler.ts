@@ -75,6 +75,15 @@ export function errorHandler(err: Error, req: Request, res: Response, _next: Nex
     return res.status(err.statusCode).json(errorBody);
   }
 
+  // Handle ZodError
+  if (err.name === 'ZodError') {
+    return res.status(400).json({
+      code: 'VALIDATION_ERROR',
+      message: 'Validation failed',
+      details: (err as any).issues,
+    });
+  }
+
   log.error({ err, requestId, method: req.method, path: req.path }, 'Unhandled error');
   res.status(500).json({
     code: 'INTERNAL_ERROR',

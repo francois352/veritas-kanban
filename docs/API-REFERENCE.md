@@ -1765,15 +1765,15 @@ These endpoints follow the same auth/error patterns documented above:
 | `/api/integrations`              | External integrations                         |
 | `/api/settings/transition-hooks` | Status transition hooks                       |
 
-| `/api/feedback` | User feedback & sentiment analytics |
-| `/api/decisions` | Decision audit trail |
-| `/api/drift` | Behavioral drift detection |
-| `/api/policies` | Agent policy & guard engine |
-| `/api/scoring/profiles` | Output evaluation profiles |
-| `/api/scoring/evaluate` | Run an output evaluation |
-| `/api/scoring/history` | Evaluation history |
-| `/api/prompt-registry` | Prompt template registry |
-| `/api/v1/system/health` | Global system health |
+| `/api/feedback`                  | User feedback & sentiment analytics           |
+| `/api/decisions`                 | Decision audit trail                          |
+| `/api/drift`                     | Behavioral drift detection                    |
+| `/api/policies`                  | Agent policy & guard engine                   |
+| `/api/scoring/profiles`          | Output evaluation profiles                    |
+| `/api/scoring/evaluate`          | Run an output evaluation                      |
+| `/api/scoring/history`           | Evaluation history                            |
+| `/api/prompt-registry`           | Prompt template registry                      |
+| `/api/v1/system/health`          | Global system health                          |
 
 ---
 
@@ -1863,7 +1863,9 @@ Query params: `agent`, `since`, `until`.
     { "category": "output-quality", "count": 18 },
     { "category": "accuracy", "count": 12 }
   ],
-  "trend": [{ "date": "2026-03-21", "positive": 5, "neutral": 1, "negative": 0 }]
+  "trend": [
+    { "date": "2026-03-21", "positive": 5, "neutral": 1, "negative": 0 }
+  ]
 }
 ```
 

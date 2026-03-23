@@ -320,12 +320,7 @@ describe('Settings Routes', () => {
 
   it('PATCH /features should accept requireDeliverableForDone', async () => {
     const fullSettings = {
-      telemetry: {
-        enabled: true,
-        retentionDays: 30,
-        enableTraces: false,
-        enableActivityTracking: true,
-      },
+      telemetry: { enabled: true, retentionDays: 30, enableTraces: false, enableActivityTracking: true },
       tasks: {
         enableTimeTracking: true,
         enableSubtaskAutoComplete: true,
@@ -351,12 +346,7 @@ describe('Settings Routes', () => {
 
   it('PATCH /features should accept requireDeliverableForDone set to false', async () => {
     const fullSettings = {
-      telemetry: {
-        enabled: true,
-        retentionDays: 30,
-        enableTraces: false,
-        enableActivityTracking: true,
-      },
+      telemetry: { enabled: true, retentionDays: 30, enableTraces: false, enableActivityTracking: true },
       tasks: {
         enableTimeTracking: true,
         enableSubtaskAutoComplete: true,

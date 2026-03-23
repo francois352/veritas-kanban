@@ -25,7 +25,11 @@ const BREAKPOINTS = { lg: 1200, md: 996, sm: 768, xs: 480 };
 const COLS = { lg: 12, md: 10, sm: 6, xs: 4 };
 const ROW_HEIGHT = 40;
 
-function WidgetGridInner({ widgets, className, width }: WidgetGridProps & { width: number }) {
+function WidgetGridInner({
+  widgets,
+  className,
+  width,
+}: WidgetGridProps & { width: number }) {
   const { layouts, onLayoutChange, resetLayout } = useDashboardLayout();
 
   const visibleIds = useMemo(
@@ -38,7 +42,9 @@ function WidgetGridInner({ widgets, className, width }: WidgetGridProps & { widt
     const result: ResponsiveLayouts = {};
     for (const bp of Object.keys(DEFAULT_LAYOUTS) as Array<keyof typeof DEFAULT_LAYOUTS>) {
       const bpLayout: Layout = layouts[bp] ?? DEFAULT_LAYOUTS[bp] ?? [];
-      result[bp] = bpLayout.filter((item: LayoutItem) => visibleIds.has(item.i));
+      result[bp] = bpLayout.filter((item: LayoutItem) =>
+        visibleIds.has(item.i)
+      );
     }
     return result;
   }, [layouts, visibleIds]);
@@ -68,12 +74,7 @@ function WidgetGridInner({ widgets, className, width }: WidgetGridProps & { widt
         breakpoints={BREAKPOINTS}
         cols={COLS}
         rowHeight={ROW_HEIGHT}
-        dragConfig={{
-          handle: '.widget-drag-handle',
-          enabled: !isMobile,
-          bounded: false,
-          threshold: 3,
-        }}
+        dragConfig={{ handle: '.widget-drag-handle', enabled: !isMobile, bounded: false, threshold: 3 }}
         resizeConfig={{ enabled: !isMobile, handles: ['se'] }}
         onLayoutChange={onLayoutChange}
         margin={[12, 12]}
@@ -105,7 +106,9 @@ export function WidgetGrid({ widgets, className }: WidgetGridProps) {
 
   return (
     <div ref={containerRef}>
-      {mounted && <WidgetGridInner widgets={widgets} className={className} width={width} />}
+      {mounted && (
+        <WidgetGridInner widgets={widgets} className={className} width={width} />
+      )}
     </div>
   );
 }
