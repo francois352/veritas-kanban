@@ -8,13 +8,12 @@ Monitor agent metric baselines and respond to detected drift.
 
 Drift detection compares an agent's current performance metrics against established baselines. When a metric deviates beyond a configured threshold, an alert is created. Alerts move through a lifecycle:
 
-| State          | Meaning                                   |
-| -------------- | ----------------------------------------- |
-| `detected`     | Deviation found, alert created            |
-| `acknowledged` | A human or process has reviewed the alert |
+| State          | Meaning                                       |
+| -------------- | --------------------------------------------- |
+| `detected`     | Deviation found, alert created                |
+| `acknowledged` | A human or process has reviewed the alert     |
 
 Metrics that drift detection monitors (examples):
-
 - Task completion rate
 - Average run duration
 - Error rate
@@ -122,30 +121,30 @@ curl -X POST http://localhost:3001/api/drift/baselines/reset \
 
 ## API Endpoints
 
-| Method | Path                                | Description                         |
-| ------ | ----------------------------------- | ----------------------------------- |
-| `GET`  | `/api/drift/alerts`                 | List drift alerts                   |
-| `POST` | `/api/drift/alerts/:id/acknowledge` | Acknowledge a drift alert           |
-| `GET`  | `/api/drift/baselines`              | List agent metric baselines         |
-| `POST` | `/api/drift/baselines/reset`        | Reset baselines for an agent/metric |
-| `POST` | `/api/drift/analyze`                | Trigger drift analysis for an agent |
+| Method | Path                                     | Description                              |
+| ------ | ---------------------------------------- | ---------------------------------------- |
+| `GET`  | `/api/drift/alerts`                      | List drift alerts                        |
+| `POST` | `/api/drift/alerts/:id/acknowledge`      | Acknowledge a drift alert                |
+| `GET`  | `/api/drift/baselines`                   | List agent metric baselines              |
+| `POST` | `/api/drift/baselines/reset`             | Reset baselines for an agent/metric      |
+| `POST` | `/api/drift/analyze`                     | Trigger drift analysis for an agent      |
 
 ---
 
 ## Alert Object Schema
 
-| Field          | Type    | Description                              |
-| -------------- | ------- | ---------------------------------------- |
-| `id`           | string  | Alert ID                                 |
-| `agent`        | string  | Agent the alert is for                   |
-| `metric`       | string  | Metric that triggered the alert          |
-| `baseline`     | number  | Expected value                           |
-| `current`      | number  | Observed value                           |
-| `deviation`    | number  | Absolute difference (current − baseline) |
-| `threshold`    | number  | Deviation amount that triggers alerting  |
-| `severity`     | string  | `low`, `medium`, `high`                  |
-| `acknowledged` | boolean | Whether the alert has been reviewed      |
-| `detectedAt`   | string  | ISO 8601 timestamp of detection          |
+| Field            | Type    | Description                                         |
+| ---------------- | ------- | --------------------------------------------------- |
+| `id`             | string  | Alert ID                                            |
+| `agent`          | string  | Agent the alert is for                              |
+| `metric`         | string  | Metric that triggered the alert                     |
+| `baseline`       | number  | Expected value                                      |
+| `current`        | number  | Observed value                                      |
+| `deviation`      | number  | Absolute difference (current − baseline)            |
+| `threshold`      | number  | Deviation amount that triggers alerting             |
+| `severity`       | string  | `low`, `medium`, `high`                             |
+| `acknowledged`   | boolean | Whether the alert has been reviewed                 |
+| `detectedAt`     | string  | ISO 8601 timestamp of detection                     |
 
 ---
 

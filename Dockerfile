@@ -44,10 +44,8 @@ FROM build-shared AS build-web
 
 # Optional: deploy under a sub-path (e.g., /kanban/) behind a reverse proxy.
 # When set, all client-side routes and API calls are prefixed automatically.
-ARG VITE_BASE_PATH=/kanban/
-ARG VITE_API_URL=
+ARG VITE_BASE_PATH=/
 ENV VITE_BASE_PATH=${VITE_BASE_PATH}
-ENV VITE_API_URL=${VITE_API_URL}
 
 COPY web/ ./web/
 RUN pnpm --filter @veritas-kanban/web build
@@ -96,7 +94,7 @@ COPY --from=build-web /app/web/dist ./web/dist
 # Note: services resolve .veritas-kanban from both cwd/.. and cwd directly,
 # so we create it at /app/ level AND ensure server/ is writable for services
 # that use process.cwd()/.veritas-kanban when WORKDIR is /app/server
-RUN mkdir -p /app/data /app/data/storage /app/data/storage/decisions /app/.veritas-kanban /app/tasks && \
+RUN mkdir -p /app/data /app/.veritas-kanban /app/tasks && \
     chown -R veritas:nodejs /app/data /app/.veritas-kanban /app/tasks /app/server
 
 # Switch to non-root user

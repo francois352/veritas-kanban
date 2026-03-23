@@ -43,7 +43,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const limit = qNum(req.query.limit);
     const resolvedRaw = qStr(req.query.resolved);
-    const resolved = resolvedRaw === 'true' ? true : resolvedRaw === 'false' ? false : undefined;
+    const resolved =
+      resolvedRaw === 'true' ? true : resolvedRaw === 'false' ? false : undefined;
 
     const items = await feedbackService.list({
       taskId: qStr(req.query.taskId),

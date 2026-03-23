@@ -30,6 +30,7 @@ import {
   createTaskSyncToken,
   type TaskSyncContext,
 } from './agent-registry-service.js';
+import pLimit from 'p-limit';
 import { getTasksActiveDir, getTasksArchiveDir } from '../utils/paths.js';
 
 const log = createLogger('task-cache');
@@ -130,15 +131,21 @@ export class TaskService {
     const mdFiles = files.filter((f) => f.endsWith('.md'));
 
     this.cache.clear();
+    const limit = pLimit(10);
+
     await Promise.all(
-      mdFiles.map(async (filename) => {
+      mdFiles.map((filename) => limit(async () => {
         const filepath = path.join(this.tasksDir, filename);
-        const content = await fs.readFile(filepath, 'utf-8');
-        const task = this.parseTaskFile(content, filename);
-        if (task) {
-          this.cache.set(task.id, task);
+        try {
+          const content = await fs.readFile(filepath, 'utf-8');
+          const task = this.parseTaskFile(content, filename);
+          if (task) {
+            this.cache.set(task.id, task);
+          }
+        } catch (error) {
+          log.warn({ error, filename }, 'Failed to read or parse task file during list operation; skipping');
         }
-      })
+      }))
     );
   }
 
