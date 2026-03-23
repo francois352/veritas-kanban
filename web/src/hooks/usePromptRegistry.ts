@@ -4,7 +4,10 @@
  */
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { promptRegistryApi } from '../lib/api/prompt-registry.js';
-import type { CreatePromptTemplateInput, UpdatePromptTemplateInput } from '@veritas-kanban/shared';
+import type {
+  CreatePromptTemplateInput,
+  UpdatePromptTemplateInput,
+} from '@veritas-kanban/shared';
 
 // Query key factory
 const promptRegistryKeys = {
@@ -94,8 +97,7 @@ export function useDeletePromptTemplate() {
 export function usePromptVersionHistory(templateId: string | null) {
   return useQuery({
     queryKey: templateId ? promptRegistryKeys.versions(templateId) : ['disabled'],
-    queryFn: () =>
-      templateId ? promptRegistryApi.getVersionHistory(templateId) : Promise.reject('No ID'),
+    queryFn: () => (templateId ? promptRegistryApi.getVersionHistory(templateId) : Promise.reject('No ID')),
     enabled: !!templateId,
     staleTime: 5 * 60 * 1000,
   });
@@ -107,8 +109,7 @@ export function usePromptVersionHistory(templateId: string | null) {
 export function usePromptUsageRecords(templateId: string | null) {
   return useQuery({
     queryKey: templateId ? promptRegistryKeys.usage(templateId) : ['disabled'],
-    queryFn: () =>
-      templateId ? promptRegistryApi.getUsageRecords(templateId) : Promise.reject('No ID'),
+    queryFn: () => (templateId ? promptRegistryApi.getUsageRecords(templateId) : Promise.reject('No ID')),
     enabled: !!templateId,
     staleTime: 2 * 60 * 1000, // 2 minutes (more volatile)
   });
@@ -179,15 +180,9 @@ export function useRecordPromptUsage() {
 /**
  * Render template preview with sample variables
  */
-export function useRenderPromptPreview(
-  templateId: string | null,
-  sampleVariables?: Record<string, string>
-) {
+export function useRenderPromptPreview(templateId: string | null, sampleVariables?: Record<string, string>) {
   return useQuery({
-    queryKey:
-      templateId && sampleVariables
-        ? ['prompt-preview', templateId, sampleVariables]
-        : ['disabled'],
+    queryKey: templateId && sampleVariables ? ['prompt-preview', templateId, sampleVariables] : ['disabled'],
     queryFn: () =>
       templateId && sampleVariables
         ? promptRegistryApi.renderPreview(templateId, sampleVariables)

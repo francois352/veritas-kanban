@@ -14,11 +14,11 @@ Send system-wide announcements to agents and users. Broadcasts are priority-tagg
 
 ## Concepts
 
-| Term                   | Definition                                                                             |
-| ---------------------- | -------------------------------------------------------------------------------------- |
-| **Broadcast**          | A system-wide message with a priority level and optional metadata                      |
-| **Priority**           | `info` (default), `action-required`, or `urgent`                                       |
-| **Read tracking**      | Each agent marks broadcasts read independently — unread state is per-agent             |
+| Term | Definition |
+|------|------------|
+| **Broadcast** | A system-wide message with a priority level and optional metadata |
+| **Priority** | `info` (default), `action-required`, or `urgent` |
+| **Read tracking** | Each agent marks broadcasts read independently — unread state is per-agent |
 | **WebSocket delivery** | New broadcasts are pushed via WebSocket in real-time; polling is available as fallback |
 
 ## Step-by-Step: Send a Broadcast
@@ -89,7 +89,9 @@ Integrate into an agent's startup or polling loop:
 ```typescript
 // On agent startup or heartbeat cycle
 async function checkBroadcasts(agentName: string): Promise<void> {
-  const response = await fetch(`${VK_API_URL}/api/broadcasts?agent=${agentName}&unread=true`);
+  const response = await fetch(
+    `${VK_API_URL}/api/broadcasts?agent=${agentName}&unread=true`
+  );
   const broadcasts = await response.json();
 
   for (const broadcast of broadcasts) {
@@ -105,7 +107,7 @@ async function checkBroadcasts(agentName: string): Promise<void> {
     await fetch(`${VK_API_URL}/api/broadcasts/${broadcast.id}/read`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ agent: agentName }),
+      body: JSON.stringify({ agent: agentName })
     });
   }
 }
@@ -139,29 +141,29 @@ curl -s "http://localhost:3001/api/broadcasts?agent=TARS&unread=true&priority=ur
 
 ## Priority Guide
 
-| Priority          | When to use                                                                      | Agent response                            |
-| ----------------- | -------------------------------------------------------------------------------- | ----------------------------------------- |
-| `info`            | Routine announcements (deployments, completions, status updates)                 | Acknowledge when convenient               |
-| `action-required` | Something needs attention but isn't critical (config change, review needed)      | Address before starting new work          |
-| `urgent`          | Immediate action required (quota exhausted, production incident, system failure) | Stop current work and respond immediately |
+| Priority | When to use | Agent response |
+|----------|-------------|----------------|
+| `info` | Routine announcements (deployments, completions, status updates) | Acknowledge when convenient |
+| `action-required` | Something needs attention but isn't critical (config change, review needed) | Address before starting new work |
+| `urgent` | Immediate action required (quota exhausted, production incident, system failure) | Stop current work and respond immediately |
 
 ## API Endpoints Used
 
-| Method  | Path                       | Purpose                      |
-| ------- | -------------------------- | ---------------------------- |
-| `POST`  | `/api/broadcasts`          | Send a broadcast             |
-| `GET`   | `/api/broadcasts`          | List broadcasts (filterable) |
-| `GET`   | `/api/broadcasts/:id`      | Get a single broadcast       |
-| `PATCH` | `/api/broadcasts/:id/read` | Mark as read for an agent    |
+| Method | Path | Purpose |
+|--------|------|---------|
+| `POST` | `/api/broadcasts` | Send a broadcast |
+| `GET` | `/api/broadcasts` | List broadcasts (filterable) |
+| `GET` | `/api/broadcasts/:id` | Get a single broadcast |
+| `PATCH` | `/api/broadcasts/:id/read` | Mark as read for an agent |
 
 ## Common Issues / Troubleshooting
 
-| Issue                                 | Cause                                             | Fix                                              |
-| ------------------------------------- | ------------------------------------------------- | ------------------------------------------------ |
-| `400` on `unread=true`                | Missing `agent` param                             | Add `?agent=<agentname>` to the query            |
-| Broadcast not appearing real-time     | Agent isn't connected via WebSocket               | Check WebSocket connection; fall back to polling |
-| Agent sees same broadcasts repeatedly | Not calling the `/read` endpoint after processing | Always mark broadcasts read after handling them  |
-| Old broadcasts cluttering the list    | No TTL/expiry in v4.0                             | Use `?since=` to filter by recency               |
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| `400` on `unread=true` | Missing `agent` param | Add `?agent=<agentname>` to the query |
+| Broadcast not appearing real-time | Agent isn't connected via WebSocket | Check WebSocket connection; fall back to polling |
+| Agent sees same broadcasts repeatedly | Not calling the `/read` endpoint after processing | Always mark broadcasts read after handling them |
+| Old broadcasts cluttering the list | No TTL/expiry in v4.0 | Use `?since=` to filter by recency |
 
 ## Related Docs
 

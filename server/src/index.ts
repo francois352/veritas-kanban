@@ -27,7 +27,6 @@ import { initAgentStatus } from './routes/agent-status.js';
 import { getTelemetryService } from './services/telemetry-service.js';
 import { ConfigService } from './services/config-service.js';
 import { disposeTaskService } from './services/task-service.js';
-import { initDispatch, stopDispatch } from './services/dispatch-service.js';
 import { initBroadcast } from './services/broadcast-service.js';
 import { runStartupMigrations } from './services/migration-service.js';
 import { getPolicyService } from './services/policy-service.js';
@@ -568,12 +567,10 @@ let configService: ConfigService | null = null;
     const featureSettings = await configService.getFeatureSettings();
     syncSettingsToServices(featureSettings);
     await getTelemetryService().init();
-
-    // 4. Initialize Redis dispatch for AI agent pipeline
-    await initDispatch();
     await getPolicyService().waitForInit();
   } catch (err) {
-    log.error({ err }, 'Failed to initialize services');
+    log.fatal({ err }, 'Failed to initialize services — server cannot start safely');
+    process.exit(1);
   }
 })();
 
@@ -703,7 +700,46 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
   let subscribedTaskId: string | null = null;
   let subscribedChatSession: string | null = null;
 
+  // Track current emitter listeners for cleanup on re-subscribe or close
+  let currentEmitter: import('events').EventEmitter | null = null;
+  let currentOutputHandler: ((output: AgentOutput) => void) | null = null;
+  let currentCompleteHandler:
+    | ((result: { code: number; signal: string | null; status: string }) => void)
+    | null = null;
+  let currentErrorHandler: ((error: Error) => void) | null = null;
+
+  const cleanupEmitterListeners = () => {
+    if (currentEmitter && currentOutputHandler) {
+      currentEmitter.off('output', currentOutputHandler);
+      currentEmitter.off('complete', currentCompleteHandler!);
+      currentEmitter.off('error', currentErrorHandler!);
+      currentEmitter = null;
+      currentOutputHandler = null;
+      currentCompleteHandler = null;
+      currentErrorHandler = null;
+    }
+  };
+
+  // ---- Message rate limiting ----
+  let messageCount = 0;
+  let messageWindowStart = Date.now();
+  const WS_MESSAGE_RATE_LIMIT = 30; // messages per window
+  const WS_MESSAGE_RATE_WINDOW_MS = 10_000; // 10 second window
+
   ws.on('message', (data) => {
+    // Rate limit check
+    const now = Date.now();
+    if (now - messageWindowStart > WS_MESSAGE_RATE_WINDOW_MS) {
+      messageCount = 0;
+      messageWindowStart = now;
+    }
+    messageCount++;
+    if (messageCount > WS_MESSAGE_RATE_LIMIT) {
+      log.warn({ count: messageCount }, 'WebSocket message rate limit exceeded');
+      ws.close(4008, 'Rate limit exceeded');
+      return;
+    }
+
     try {
       const message = JSON.parse(data.toString());
 
@@ -763,17 +799,20 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
         }
         agentSubscriptions.get(newTaskId)!.add(ws);
 
+        // Clean up previous emitter listeners before subscribing to new task
+        cleanupEmitterListeners();
+
         // Set up listener for agent output
         const emitter = agentService.getAgentEmitter(newTaskId);
         if (emitter) {
-          const currentTaskId = newTaskId;
+          const taskIdForHandlers = newTaskId;
 
-          const outputHandler = (output: AgentOutput) => {
+          currentOutputHandler = (output: AgentOutput) => {
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(
                 JSON.stringify({
                   type: 'agent:output',
-                  taskId: currentTaskId,
+                  taskId: taskIdForHandlers,
                   outputType: output.type,
                   content: output.content,
                   timestamp: output.timestamp,
@@ -782,7 +821,7 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
             }
           };
 
-          const completeHandler = (result: {
+          currentCompleteHandler = (result: {
             code: number;
             signal: string | null;
             status: string;
@@ -791,35 +830,29 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
               ws.send(
                 JSON.stringify({
                   type: 'agent:complete',
-                  taskId: currentTaskId,
+                  taskId: taskIdForHandlers,
                   ...result,
                 })
               );
             }
           };
 
-          const errorHandler = (error: Error) => {
+          currentErrorHandler = (error: Error) => {
             if (ws.readyState === WebSocket.OPEN) {
               ws.send(
                 JSON.stringify({
                   type: 'agent:error',
-                  taskId: currentTaskId,
+                  taskId: taskIdForHandlers,
                   error: error.message,
                 })
               );
             }
           };
 
-          emitter.on('output', outputHandler);
-          emitter.on('complete', completeHandler);
-          emitter.on('error', errorHandler);
-
-          // Clean up listeners when WebSocket closes
-          ws.on('close', () => {
-            emitter.off('output', outputHandler);
-            emitter.off('complete', completeHandler);
-            emitter.off('error', errorHandler);
-          });
+          currentEmitter = emitter;
+          emitter.on('output', currentOutputHandler);
+          emitter.on('complete', currentCompleteHandler);
+          emitter.on('error', currentErrorHandler);
         }
 
         // Send confirmation
@@ -844,6 +877,9 @@ wss.on('connection', (ws: HeartbeatWebSocket, req) => {
       clearTimeout(ws.heartbeatTimer);
       ws.heartbeatTimer = undefined;
     }
+
+    // Clean up emitter listeners
+    cleanupEmitterListeners();
 
     // Clean up agent subscriptions
     if (subscribedTaskId) {
@@ -889,25 +925,41 @@ async function gracefulShutdown(signal: string) {
   });
 
   // Close the WebSocket server itself (stop accepting new connections)
-  await new Promise<void>((resolve) => {
-    wss.close((err) => {
-      if (err) log.error({ err }, 'Error closing WebSocket server');
-      else log.info('WebSocket server closed');
-      resolve();
-    });
-  });
+  // Timeout: if clients don't close within 3s, continue shutdown
+  await Promise.race([
+    new Promise<void>((resolve) => {
+      wss.close((err) => {
+        if (err) log.error({ err }, 'Error closing WebSocket server');
+        else log.info('WebSocket server closed');
+        resolve();
+      });
+    }),
+    new Promise<void>((resolve) =>
+      setTimeout(() => {
+        log.warn('WebSocket server close timed out after 3s — continuing shutdown');
+        resolve();
+      }, 3000)
+    ),
+  ]);
 
   // 2. Dispose services (release file watchers, flush buffers)
   try {
     log.info('Disposing services');
 
-    // Flush pending telemetry writes
-    await getTelemetryService().flush();
+    // Flush pending telemetry writes (timeout: 5s)
+    await Promise.race([
+      getTelemetryService().flush(),
+      new Promise<void>((resolve) =>
+        setTimeout(() => {
+          log.warn('Telemetry flush timed out after 5s — continuing shutdown');
+          resolve();
+        }, 5000)
+      ),
+    ]);
     log.info('Telemetry flushed');
 
     // Dispose task service (closes file watchers, clears cache)
     disposeTaskService();
-    await stopDispatch();
     log.info('Task service disposed');
 
     // Dispose config service (closes file watcher, clears cache)

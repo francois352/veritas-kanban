@@ -102,10 +102,7 @@ export const promptRegistryApi = {
   /**
    * Render template preview with sample variables
    */
-  renderPreview: async (
-    templateId: string,
-    sampleVariables: Record<string, string>
-  ): Promise<RenderPreviewResponse> => {
+  renderPreview: async (templateId: string, sampleVariables: Record<string, string>): Promise<RenderPreviewResponse> => {
     const response = await fetch(`${API_BASE}/prompt-registry/${templateId}/render-preview`, {
       credentials: 'include',
       method: 'POST',
