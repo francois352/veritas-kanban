@@ -1,6 +1,6 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { fileExists } from '../storage/fs-helpers.js';
-import { join } from 'path';
+import { dirname, join } from 'path';
 import { createLogger } from '../lib/logger.js';
 import { withFileLock } from './file-lock.js';
 const log = createLogger('status-history-service');
@@ -36,36 +36,44 @@ export interface StatusPeriod {
   taskTitle?: string;
 }
 
+export interface StatusHistoryServiceOptions {
+  historyFile?: string;
+}
+
 export class StatusHistoryService {
   private historyFile: string;
   private readonly MAX_ENTRIES = 5000; // Keep more entries for historical analysis
   private lastEntry: StatusHistoryEntry | null = null;
+  private initPromise: Promise<void>;
 
-  constructor() {
-    this.historyFile = join(process.cwd(), '.veritas-kanban', 'status-history.json');
-    this.ensureDir();
-    this.loadLastEntry();
+  constructor(options: StatusHistoryServiceOptions = {}) {
+    this.historyFile =
+      options.historyFile || join(process.cwd(), '.veritas-kanban', 'status-history.json');
+    this.initPromise = this.ensureDir();
   }
 
   private async ensureDir(): Promise<void> {
-    const dir = join(process.cwd(), '.veritas-kanban');
-    await mkdir(dir, { recursive: true });
+    await mkdir(dirname(this.historyFile), { recursive: true });
   }
 
-  private async loadLastEntry(): Promise<void> {
+  private async getLastEntry(): Promise<StatusHistoryEntry | null> {
+    if (this.lastEntry) {
+      return this.lastEntry;
+    }
+
     try {
       const entries = await this.getHistory(1);
-      if (entries.length > 0) {
-        this.lastEntry = entries[0];
-      }
+      this.lastEntry = entries[0] ?? null;
+      return this.lastEntry;
     } catch {
       // Intentionally silent: history file may not exist on first run
       this.lastEntry = null;
+      return null;
     }
   }
 
   async getHistory(limit: number = 100, offset: number = 0): Promise<StatusHistoryEntry[]> {
-    await this.ensureDir();
+    await this.initPromise;
 
     if (!(await fileExists(this.historyFile))) {
       return [];
@@ -88,15 +96,16 @@ export class StatusHistoryService {
     taskTitle?: string,
     subAgentCount?: number
   ): Promise<StatusHistoryEntry> {
-    await this.ensureDir();
+    await this.initPromise;
 
     const now = new Date();
     const timestamp = now.toISOString();
 
     // Calculate duration of previous status
     let durationMs: number | undefined;
-    if (this.lastEntry) {
-      const lastTime = new Date(this.lastEntry.timestamp).getTime();
+    const previousEntry = await this.getLastEntry();
+    if (previousEntry) {
+      const lastTime = new Date(previousEntry.timestamp).getTime();
       durationMs = now.getTime() - lastTime;
     }
 
@@ -269,7 +278,7 @@ export class StatusHistoryService {
   }
 
   async clearHistory(): Promise<void> {
-    await this.ensureDir();
+    await this.initPromise;
     await writeFile(this.historyFile, '[]', 'utf-8');
     this.lastEntry = null;
   }

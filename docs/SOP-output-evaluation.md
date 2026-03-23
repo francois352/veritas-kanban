@@ -10,20 +10,20 @@ The Scoring Framework lets you define profiles with weighted criteria that evalu
 
 **Scorer types:**
 
-| Type               | What it checks                                             |
-| ------------------ | ---------------------------------------------------------- |
-| `RegexMatch`       | Whether the output matches a regular expression            |
-| `KeywordContains`  | Whether the output contains required keywords              |
-| `NumericRange`     | Whether a numeric field in the output falls within a range |
-| `CustomExpression` | A custom evaluation expression                             |
+| Type                | What it checks                                               |
+| ------------------- | ------------------------------------------------------------ |
+| `RegexMatch`        | Whether the output matches a regular expression              |
+| `KeywordContains`   | Whether the output contains required keywords                |
+| `NumericRange`      | Whether a numeric field in the output falls within a range   |
+| `CustomExpression`  | A custom evaluation expression                               |
 
 **Composite methods:**
 
-| Method          | Behavior                                         |
-| --------------- | ------------------------------------------------ |
-| `weightedAvg`   | Weighted average of all scorer scores            |
-| `minimum`       | Score is the lowest individual scorer score      |
-| `geometricMean` | Geometric mean — penalizes any single low scorer |
+| Method          | Behavior                                              |
+| --------------- | ----------------------------------------------------- |
+| `weightedAvg`   | Weighted average of all scorer scores                 |
+| `minimum`       | Score is the lowest individual scorer score           |
+| `geometricMean` | Geometric mean — penalizes any single low scorer      |
 
 ---
 

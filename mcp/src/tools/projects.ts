@@ -44,9 +44,10 @@ const CreateProjectSchema = z.object({
   color: z
     .string()
     .optional()
-    .refine((val) => val === undefined || tailwindColorRegex.test(val), {
-      message: 'color must be a valid Tailwind class segment like "green-500" or "red-200"',
-    }),
+    .refine(
+      (val) => val === undefined || tailwindColorRegex.test(val),
+      { message: 'color must be a valid Tailwind class segment like "green-500" or "red-200"' }
+    ),
 });
 
 const UpdateProjectSchema = z.object({
@@ -56,9 +57,10 @@ const UpdateProjectSchema = z.object({
   color: z
     .string()
     .optional()
-    .refine((val) => val === undefined || tailwindColorRegex.test(val), {
-      message: 'color must be a valid Tailwind class segment like "green-500" or "red-200"',
-    }),
+    .refine(
+      (val) => val === undefined || tailwindColorRegex.test(val),
+      { message: 'color must be a valid Tailwind class segment like "green-500" or "red-200"' }
+    ),
   isHidden: z.boolean().optional(),
 });
 
@@ -189,7 +191,8 @@ export const projectTools = [
   },
   {
     name: 'reorder_projects',
-    description: 'Reorder projects by providing an array of project IDs in the desired order',
+    description:
+      'Reorder projects by providing an array of project IDs in the desired order',
     inputSchema: {
       type: 'object',
       properties: {
@@ -276,7 +279,9 @@ export async function handleProjectTool(name: string, args: any): Promise<any> {
       );
 
       // Handle both array response and wrapped {data: [...]} response
-      const taskList: Task[] = Array.isArray(tasks) ? tasks : ((tasks as any).data ?? []);
+      const taskList: Task[] = Array.isArray(tasks)
+        ? tasks
+        : (tasks as any).data ?? [];
 
       const byStatus: Record<string, number> = {};
       for (const task of taskList) {
