@@ -8,11 +8,11 @@ Configure and enforce access policies for agent tools and actions.
 
 The Agent Policy Engine lets you define named policies with guard rules that control what tools and actions each agent can access. Rules support three effects:
 
-| Effect             | Behavior                                  |
-| ------------------ | ----------------------------------------- |
-| `allow`            | Permit the tool/action immediately        |
-| `deny`             | Block the tool/action with a 403 response |
-| `require-approval` | Hold the request until a human approves   |
+| Effect              | Behavior                                           |
+| ------------------- | -------------------------------------------------- |
+| `allow`             | Permit the tool/action immediately                 |
+| `deny`              | Block the tool/action with a 403 response          |
+| `require-approval`  | Hold the request until a human approves            |
 
 Policies are evaluated in order of precedence. The engine supports two precedence strategies:
 
@@ -121,35 +121,35 @@ curl -X DELETE http://localhost:3001/api/policies/pol_abc123 \
 
 ## API Endpoints
 
-| Method   | Path                         | Description                     |
-| -------- | ---------------------------- | ------------------------------- |
-| `GET`    | `/api/policies`              | List all policies               |
-| `POST`   | `/api/policies`              | Create a new policy             |
-| `GET`    | `/api/policies/:id`          | Get a specific policy           |
-| `PUT`    | `/api/policies/:id`          | Update a policy                 |
-| `DELETE` | `/api/policies/:id`          | Delete a policy                 |
-| `POST`   | `/api/policies/:id/evaluate` | Evaluate a policy for an action |
+| Method   | Path                           | Description                     |
+| -------- | ------------------------------ | ------------------------------- |
+| `GET`    | `/api/policies`                | List all policies                |
+| `POST`   | `/api/policies`                | Create a new policy              |
+| `GET`    | `/api/policies/:id`            | Get a specific policy            |
+| `PUT`    | `/api/policies/:id`            | Update a policy                  |
+| `DELETE` | `/api/policies/:id`            | Delete a policy                  |
+| `POST`   | `/api/policies/:id/evaluate`   | Evaluate a policy for an action  |
 
 ---
 
 ## Policy Object Schema
 
-| Field         | Type    | Required | Description                                 |
-| ------------- | ------- | -------- | ------------------------------------------- |
-| `name`        | string  | ✅       | Human-readable policy name                  |
-| `description` | string  | ❌       | What the policy does                        |
-| `enabled`     | boolean | ✅       | Whether the policy is active                |
-| `scope`       | object  | ❌       | Targeting: `{ agent, agentLevel, project }` |
-| `rules`       | array   | ✅       | Array of guard rules (see below)            |
-| `precedence`  | enum    | ✅       | `deny-first` or `allow-first`               |
+| Field         | Type     | Required | Description                                      |
+| ------------- | -------- | -------- | ------------------------------------------------ |
+| `name`        | string   | ✅       | Human-readable policy name                       |
+| `description` | string   | ❌       | What the policy does                             |
+| `enabled`     | boolean  | ✅       | Whether the policy is active                     |
+| `scope`       | object   | ❌       | Targeting: `{ agent, agentLevel, project }`      |
+| `rules`       | array    | ✅       | Array of guard rules (see below)                 |
+| `precedence`  | enum     | ✅       | `deny-first` or `allow-first`                    |
 
 ### Guard Rule Schema
 
-| Field    | Type   | Required | Description                            |
-| -------- | ------ | -------- | -------------------------------------- |
-| `tool`   | string | ✅       | Tool name or `*` for any               |
-| `action` | string | ✅       | Action name or `*` for any             |
-| `effect` | enum   | ✅       | `allow`, `deny`, or `require-approval` |
+| Field    | Type   | Required | Description                                      |
+| -------- | ------ | -------- | ------------------------------------------------ |
+| `tool`   | string | ✅       | Tool name or `*` for any                         |
+| `action` | string | ✅       | Action name or `*` for any                       |
+| `effect` | enum   | ✅       | `allow`, `deny`, or `require-approval`           |
 
 ---
 
