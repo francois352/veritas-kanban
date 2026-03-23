@@ -173,6 +173,9 @@ export class ChatService {
    * Get a session by ID
    */
   async getSession(sessionId: string): Promise<ChatSession | null> {
+    // Path traversal prevention: validate raw input before checking regex match
+    validatePathSegment(sessionId);
+
     // Try to find the session file (could be task-scoped or board-level)
     // First check if it's a task-scoped session
     const taskMatch = sessionId.match(/^task_(.+)$/);
@@ -283,6 +286,9 @@ export class ChatService {
     sessionId: string,
     message: Omit<ChatMessage, 'id' | 'timestamp'>
   ): Promise<ChatMessage> {
+    // Path traversal prevention
+    validatePathSegment(sessionId);
+
     const newMessage: ChatMessage = {
       id: this.generateMessageId(),
       timestamp: new Date().toISOString(),
@@ -317,6 +323,9 @@ export class ChatService {
    * Delete a session
    */
   async deleteSession(sessionId: string): Promise<void> {
+    // Path traversal prevention: validate raw input before checking regex match
+    validatePathSegment(sessionId);
+
     // Determine file path - need to check both task-scoped and board-level paths
     const taskMatch = sessionId.match(/^task_(.+)$/);
     const taskId = taskMatch ? taskMatch[1] : undefined;

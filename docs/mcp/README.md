@@ -497,15 +497,15 @@ The reference check is **skipped entirely**. The sprint is deleted regardless of
 
 Full project lifecycle management from MCP — create, organize, and track projects without leaving your agent context.
 
-| Tool                | Description                      | Required Inputs | Key Options                        |
-| ------------------- | -------------------------------- | --------------- | ---------------------------------- |
-| `list_projects`     | List all projects                | _(none)_        | `includeHidden`                    |
-| `get_project`       | Get a project by ID              | `id`            | —                                  |
-| `create_project`    | Create a new project             | `label`         | `description`, `color`             |
-| `update_project`    | Update project fields            | `id`            | `label`, `description`, `isHidden` |
-| `delete_project`    | Delete a project                 | `id`            | `force`                            |
-| `get_project_stats` | Task counts and status breakdown | `id`            | —                                  |
-| `reorder_projects`  | Reorder projects in the sidebar  | `orderedIds`    | —                                  |
+| Tool                  | Description                          | Required Inputs | Key Options                  |
+| --------------------- | ------------------------------------ | --------------- | ---------------------------- |
+| `list_projects`       | List all projects                    | _(none)_        | `includeHidden`              |
+| `get_project`         | Get a project by ID                  | `id`            | —                            |
+| `create_project`      | Create a new project                 | `label`         | `description`, `color`       |
+| `update_project`      | Update project fields                | `id`            | `label`, `description`, `isHidden` |
+| `delete_project`      | Delete a project                     | `id`            | `force`                      |
+| `get_project_stats`   | Task counts and status breakdown     | `id`            | —                            |
+| `reorder_projects`    | Reorder projects in the sidebar      | `orderedIds`    | —                            |
 
 <details>
 <summary><strong>Examples</strong></summary>
@@ -515,11 +515,7 @@ Full project lifecycle management from MCP — create, organize, and track proje
 ```json
 {
   "name": "create_project",
-  "arguments": {
-    "label": "Rubicon",
-    "description": "Industrial safety AI platform",
-    "color": "#8B5CF6"
-  }
+  "arguments": { "label": "Rubicon", "description": "Industrial safety AI platform", "color": "#8B5CF6" }
 }
 ```
 
@@ -569,13 +565,13 @@ Full project lifecycle management from MCP — create, organize, and track proje
 
 Full CRUD for task and sprint comments, enabling agents to participate in async review threads.
 
-| Tool             | Description              | Required Inputs                  | Key Options |
-| ---------------- | ------------------------ | -------------------------------- | ----------- |
-| `add_comment`    | Add a comment to a task  | `taskId`, `content`              | `author`    |
-| `list_comments`  | List comments for a task | `taskId`                         | `limit`     |
-| `get_comment`    | Get a single comment     | `taskId`, `commentId`            | —           |
-| `update_comment` | Edit a comment           | `taskId`, `commentId`, `content` | —           |
-| `delete_comment` | Delete a comment         | `taskId`, `commentId`            | —           |
+| Tool             | Description              | Required Inputs             | Key Options  |
+| ---------------- | ------------------------ | --------------------------- | ------------ |
+| `add_comment`    | Add a comment to a task  | `taskId`, `content`         | `author`     |
+| `list_comments`  | List comments for a task | `taskId`                    | `limit`      |
+| `get_comment`    | Get a single comment     | `taskId`, `commentId`       | —            |
+| `update_comment` | Edit a comment           | `taskId`, `commentId`, `content` | —       |
+| `delete_comment` | Delete a comment         | `taskId`, `commentId`       | —            |
 
 <details>
 <summary><strong>Examples</strong></summary>

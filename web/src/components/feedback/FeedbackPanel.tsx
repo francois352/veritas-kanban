@@ -262,7 +262,9 @@ function BrowseTab() {
           placeholder="Filter by agent"
           className="w-40"
           value={filters.agent ?? ''}
-          onChange={(e) => setFilters((f) => ({ ...f, agent: e.target.value || undefined }))}
+          onChange={(e) =>
+            setFilters((f) => ({ ...f, agent: e.target.value || undefined }))
+          }
         />
         <Select
           value={filters.sentiment ?? 'all'}
@@ -377,8 +379,8 @@ function FeedbackCard({
                 {' '}
                 · Agent: <span className="font-medium">{item.agent}</span>
               </>
-            )}{' '}
-            · {new Date(item.createdAt).toLocaleDateString()}
+            )}
+            {' '}· {new Date(item.createdAt).toLocaleDateString()}
           </p>
           {item.categories.length > 0 && (
             <div className="flex flex-wrap gap-1 mt-1">
@@ -482,7 +484,9 @@ function AnalyticsTab() {
                       style={{ width: `${pct}%` }}
                     />
                   </div>
-                  <span className="w-10 text-right text-muted-foreground">{pct.toFixed(0)}%</span>
+                  <span className="w-10 text-right text-muted-foreground">
+                    {pct.toFixed(0)}%
+                  </span>
                 </div>
               );
             })}
@@ -496,7 +500,11 @@ function AnalyticsTab() {
             <ResponsiveContainer width="100%" height={200}>
               <LineChart data={analytics.satisfactionTrends}>
                 <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
-                <XAxis dataKey="date" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                <XAxis
+                  dataKey="date"
+                  tick={{ fontSize: 11 }}
+                  className="fill-muted-foreground"
+                />
                 <YAxis domain={[0, 5]} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
                 <Tooltip
                   formatter={(val) => [`${Number(val).toFixed(2)}`, 'Avg Rating']}

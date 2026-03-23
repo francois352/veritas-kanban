@@ -3,35 +3,40 @@ import { z } from 'zod';
 import { PromptRegistryService } from '../services/prompt-registry-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import { writeRateLimit } from '../middleware/rate-limit.js'; // Rate limiting
 
 const router: RouterType = Router();
 const promptService = new PromptRegistryService();
 
 // Validation schemas
+// Input length limits
 const createPromptTemplateSchema = z.object({
-  name: z.string().min(1, 'Template name is required'),
-  description: z.string().optional(),
+  name: z.string().min(1, 'Template name is required').max(100),
+  description: z.string().max(500).optional(),
   category: z.enum(['system', 'agent', 'tool', 'evaluation']),
-  content: z.string().min(1, 'Template content is required'),
+  content: z.string().min(1, 'Template content is required').max(50000),
 });
 
+// Input length limits
 const updatePromptTemplateSchema = z.object({
-  name: z.string().min(1).optional(),
-  description: z.string().optional(),
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).optional(),
   category: z.enum(['system', 'agent', 'tool', 'evaluation']).optional(),
-  content: z.string().min(1).optional(),
-  changelog: z.string().optional(),
+  content: z.string().min(1).max(50000).optional(),
+  changelog: z.string().max(1000).optional(),
 });
 
+// Input length limits
 const renderPreviewSchema = z.object({
-  templateId: z.string(),
-  sampleVariables: z.record(z.string(), z.string()),
+  templateId: z.string().max(100),
+  sampleVariables: z.record(z.string().max(100), z.string().max(10000)),
 });
 
+// Input length limits
 const recordUsageSchema = z.object({
-  usedBy: z.string().optional(),
-  renderedPrompt: z.string().optional(),
-  model: z.string().optional(),
+  usedBy: z.string().max(100).optional(),
+  renderedPrompt: z.string().max(50000).optional(),
+  model: z.string().max(100).optional(),
   inputTokens: z.number().optional(),
   outputTokens: z.number().optional(),
 });
@@ -60,6 +65,7 @@ router.get(
 // POST /api/prompt-registry - Create template
 router.post(
   '/',
+  writeRateLimit, // Rate limiting
   asyncHandler(async (req, res) => {
     let input;
     try {
@@ -78,6 +84,7 @@ router.post(
 // PATCH /api/prompt-registry/:id - Update template
 router.patch(
   '/:id',
+  writeRateLimit, // Rate limiting
   asyncHandler(async (req, res) => {
     let input;
     try {
@@ -99,6 +106,7 @@ router.patch(
 // DELETE /api/prompt-registry/:id - Delete template
 router.delete(
   '/:id',
+  writeRateLimit, // Rate limiting
   asyncHandler(async (req, res) => {
     const deleted = await promptService.deleteTemplate(req.params.id as string);
     if (!deleted) {
@@ -150,6 +158,7 @@ router.get(
 // POST /api/prompt-registry/:id/render-preview - Render template with sample variables
 router.post(
   '/:id/render-preview',
+  writeRateLimit, // Rate limiting
   asyncHandler(async (req, res) => {
     let request;
     try {
@@ -171,6 +180,7 @@ router.post(
 // POST /api/prompt-registry/:id/record-usage - Track template usage
 router.post(
   '/:id/record-usage',
+  writeRateLimit, // Rate limiting
   asyncHandler(async (req, res) => {
     let input;
     try {

@@ -3,6 +3,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { validate, type ValidatedRequest } from '../middleware/validate.js';
 import { NotFoundError } from '../middleware/error-handler.js';
 import { getDecisionService } from '../services/decision-service.js';
+import { writeRateLimit } from '../middleware/rate-limit.js'; // Rate limiting
 import {
   assumptionParamsSchema,
   createDecisionSchema,
@@ -21,6 +22,7 @@ const decisionService = getDecisionService();
 
 router.post(
   '/',
+  writeRateLimit, // Rate limiting
   validate({ body: createDecisionSchema }),
   asyncHandler(async (req: ValidatedRequest<unknown, unknown, CreateDecisionSchema>, res) => {
     const body = req.validated.body as CreateDecisionSchema;
@@ -56,6 +58,7 @@ router.get(
 
 router.patch(
   '/:id/assumptions/:idx',
+  writeRateLimit, // Rate limiting
   validate({ params: assumptionParamsSchema, body: updateAssumptionSchema }),
   asyncHandler(
     async (req: ValidatedRequest<AssumptionParams, unknown, UpdateAssumptionSchema>, res) => {

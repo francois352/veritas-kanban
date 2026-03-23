@@ -13,21 +13,21 @@ const DecisionIdSchema = z
   .regex(/^[a-zA-Z0-9_-]+$/, 'Invalid decision id format');
 
 const AssumptionSchema = z.union([
-  nonEmptyString,
+  nonEmptyString.max(5000), // Input length limits
   z.object({
-    text: nonEmptyString,
+    text: nonEmptyString.max(5000), // Input length limits
   }),
 ]);
 
 export const createDecisionSchema = z.object({
-  inputContext: nonEmptyString,
-  outputAction: nonEmptyString,
+  inputContext: nonEmptyString.max(5000), // Input length limits
+  outputAction: nonEmptyString.max(5000), // Input length limits
   assumptions: z.array(AssumptionSchema).default([]),
   confidenceLevel: z.number().int().min(0).max(100),
   riskScore: z.number().min(0).max(100),
   parentDecisionId: DecisionIdSchema.optional(),
-  agentId: nonEmptyString,
-  taskId: nonEmptyString,
+  agentId: nonEmptyString.max(100), // Input length limits
+  taskId: nonEmptyString.max(100), // Input length limits
   timestamp: optionalIsoDate,
 });
 

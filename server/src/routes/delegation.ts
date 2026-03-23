@@ -12,6 +12,7 @@ import { ValidationError } from '../middleware/error-handler.js';
 import { auditLog } from '../services/audit-service.js';
 import type { AuthenticatedRequest } from '../middleware/auth.js';
 import { authorize } from '../middleware/auth.js';
+import { writeRateLimit } from '../middleware/rate-limit.js'; // Rate limiting
 
 const router: RouterType = Router();
 const delegationService = getDelegationService();
@@ -34,6 +35,7 @@ router.get(
  */
 router.post(
   '/',
+  writeRateLimit, // Rate limiting
   authorize('admin'), // Only admins can set delegation
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const parsed = SetDelegationRequestSchema.safeParse(req.body);
@@ -81,6 +83,7 @@ router.post(
  */
 router.delete(
   '/',
+  writeRateLimit, // Rate limiting
   authorize('admin'),
   asyncHandler(async (req: AuthenticatedRequest, res) => {
     const revoked = await delegationService.revokeDelegation();

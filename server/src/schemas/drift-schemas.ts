@@ -28,13 +28,15 @@ export const DriftBaselinesQuerySchema = z.object({
   metric: DriftMetricSchema.optional(),
 });
 
+// Input length limits
 export const DriftBaselineResetSchema = z.object({
-  agentId: z.string().min(1, 'agentId is required'),
+  agentId: z.string().min(1, 'agentId is required').max(100),
   metric: DriftMetricSchema.optional(),
 });
 
+// Input length limits
 export const DriftAnalyzeSchema = z.object({
-  agentId: z.string().min(1, 'agentId is required'),
+  agentId: z.string().min(1, 'agentId is required').max(100),
 });
 
 export type DriftAlertsQuery = z.infer<typeof DriftAlertsQuerySchema>;

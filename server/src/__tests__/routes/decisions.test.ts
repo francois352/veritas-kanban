@@ -23,9 +23,39 @@ describe('Decision Routes', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     app = express();
+    app.set('trust proxy', 1);
     app.use(express.json());
     app.use('/api/decisions', decisionRoutes);
     app.use(errorHandler);
+  });
+
+  it('enforces rate limits on POST /api/decisions', async () => {
+    mockDecisionService.create.mockResolvedValue({});
+    let res;
+    for (let i = 0; i < 65; i++) {
+      res = await request(app).post('/api/decisions').set('X-Forwarded-For', '192.168.1.106').send({
+        inputContext: 'a',
+        outputAction: 'b',
+        confidenceLevel: 50,
+        riskScore: 50,
+        agentId: 'agent',
+        taskId: 'task',
+      });
+    }
+    expect(res?.status).toBe(429);
+  });
+
+  it('rejects overly long inputs in POST /api/decisions', async () => {
+    const res = await request(app).post('/api/decisions').send({
+      inputContext: 'a'.repeat(5001),
+      outputAction: 'b',
+      confidenceLevel: 50,
+      riskScore: 50,
+      agentId: 'agent',
+      taskId: 'task',
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.code).toBe('VALIDATION_ERROR');
   });
 
   it('POST /api/decisions creates a decision', async () => {

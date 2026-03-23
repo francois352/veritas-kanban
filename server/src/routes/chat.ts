@@ -8,6 +8,8 @@ import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { getChatService } from '../services/chat-service.js';
 import { sendGatewayChat, loadGatewayToken } from '../services/gateway-chat-client.js';
+import { writeRateLimit } from '../middleware/rate-limit.js'; // Rate limiting
+import { stripHtml } from '../utils/sanitize.js'; // Output sanitization
 import { broadcastChatMessage, broadcastSquadMessage } from '../services/broadcast-service.js';
 import { fireSquadWebhook } from '../services/squad-webhook-service.js';
 import { ConfigService } from '../services/config-service.js';
@@ -26,24 +28,26 @@ const chatService = getChatService();
 const configService = new ConfigService();
 
 // Validation schemas
+// Input length limits
 const chatSendSchema = z.object({
-  sessionId: z.string().optional(),
-  taskId: z.string().optional(),
-  message: z.string().min(1, 'Message cannot be empty'),
-  agent: z.string().optional(),
-  model: z.string().optional(),
+  sessionId: z.string().max(100).optional(),
+  taskId: z.string().max(100).optional(),
+  message: z.string().min(1, 'Message cannot be empty').max(5000),
+  agent: z.string().max(100).optional(),
+  model: z.string().max(100).optional(),
   mode: z.enum(['ask', 'build']).optional(),
 });
 
+// Input length limits
 const squadMessageSchema = z.object({
-  agent: z.string().min(1, 'Agent name required'),
-  message: z.string().min(1, 'Message cannot be empty'),
+  agent: z.string().min(1, 'Agent name required').max(100),
+  message: z.string().min(1, 'Message cannot be empty').max(5000),
   tags: z.array(z.string()).optional(),
-  model: z.string().optional(),
+  model: z.string().max(100).optional(),
   system: z.boolean().optional(),
   event: z.enum(['agent.spawned', 'agent.completed', 'agent.failed', 'agent.status']).optional(),
-  taskTitle: z.string().optional(),
-  duration: z.string().optional(),
+  taskTitle: z.string().max(200).optional(),
+  duration: z.string().max(50).optional(),
   card: z.record(z.unknown()).optional(), // Adaptive Card v1.5 JSON
 });
 
@@ -56,6 +60,7 @@ const squadMessageSchema = z.object({
  */
 router.post(
   '/send',
+  writeRateLimit, // Rate limiting
   asyncHandler(async (req, res) => {
     // Validate input
     const validatedInput = chatSendSchema.parse(req.body);
@@ -253,8 +258,13 @@ router.delete(
  */
 router.post(
   '/squad',
+  writeRateLimit, // Rate limiting
   asyncHandler(async (req, res) => {
     const validatedInput = squadMessageSchema.parse(req.body);
+
+    // Output sanitization (XSS risk)
+    const sanitizedMessage = stripHtml(validatedInput.message);
+    const sanitizedTaskTitle = validatedInput.taskTitle ? stripHtml(validatedInput.taskTitle) : undefined;
 
     // Get displayName from settings if agent is Human
     const config = await configService.getFeatureSettings();
@@ -265,12 +275,12 @@ router.post(
     const message = await chatService.sendSquadMessage(
       {
         agent: validatedInput.agent,
-        message: validatedInput.message,
+        message: sanitizedMessage,
         tags: validatedInput.tags,
         model: validatedInput.model,
         system: validatedInput.system,
         event: validatedInput.event,
-        taskTitle: validatedInput.taskTitle,
+        taskTitle: sanitizedTaskTitle,
         duration: validatedInput.duration,
         card: validatedInput.card,
       },

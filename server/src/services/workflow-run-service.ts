@@ -196,21 +196,6 @@ export class WorkflowRunService {
           await this.saveRun(run);
           broadcastWorkflowStatus(run);
         } catch (err: unknown) {
-          // Check if this is a dispatch (async agent step), not a failure
-          if (err && typeof err === 'object' && (err as any).isDispatch) {
-            stepRun.status = 'running'; // Keep as running (agent is working)
-            stepRun.error = undefined;
-            run.status = 'blocked';
-            run.error = err instanceof Error ? err.message : 'Dispatched to agent';
-            await this.saveRun(run);
-            broadcastWorkflowStatus(run);
-            log.info(
-              { runId: run.id, stepId: step.id },
-              'Workflow blocked — agent dispatched, awaiting completion'
-            );
-            return;
-          }
-
           // Step failed
           stepRun.status = 'failed';
           stepRun.error = err instanceof Error ? err.message : 'Unknown error';
@@ -513,59 +498,6 @@ export class WorkflowRunService {
 
     this.executeRun(run, workflow).catch((err) => {
       log.error({ runId, err }, 'Workflow resume failed');
-    });
-
-    return run;
-  }
-
-  /**
-   * Complete a dispatched step and resume the workflow.
-   * Called by agents when they finish their assigned work.
-   */
-  async completeStep(
-    runId: string,
-    stepId: string,
-    output: Record<string, unknown>
-  ): Promise<WorkflowRun> {
-    const run = await this.getRun(runId);
-    if (!run) {
-      throw new NotFoundError(`Run ${runId} not found`);
-    }
-
-    if (run.status !== 'blocked') {
-      throw new ValidationError(`Run ${runId} is not blocked (status: ${run.status})`);
-    }
-
-    const stepRun = run.steps.find((s) => s.stepId === stepId);
-    if (!stepRun) {
-      throw new NotFoundError(`Step ${stepId} not found in run ${runId}`);
-    }
-
-    // Mark step as completed
-    stepRun.status = 'completed';
-    stepRun.completedAt = new Date().toISOString();
-    if (stepRun.startedAt) {
-      stepRun.duration = Math.floor(
-        (new Date(stepRun.completedAt).getTime() - new Date(stepRun.startedAt).getTime()) / 1000
-      );
-    }
-
-    // Merge step output into context
-    run.context[stepId] = output;
-    run.status = 'running';
-    run.error = undefined;
-    await this.saveRun(run);
-
-    // Resume execution from next step
-    const workflow = await this.workflowService.loadWorkflow(run.workflowId);
-    if (!workflow) {
-      throw new NotFoundError(`Workflow ${run.workflowId} not found`);
-    }
-
-    log.info({ runId, stepId, output }, 'Step completed by agent — resuming workflow');
-
-    this.executeRun(run, workflow).catch((err) => {
-      log.error({ runId, err }, 'Workflow resume after step completion failed');
     });
 
     return run;

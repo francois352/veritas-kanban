@@ -4,15 +4,17 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { BadRequestError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { feedbackService } from '../services/feedback-service.js';
 import { paramStr, qNum, qStr } from '../lib/query-helpers.js';
+import { writeRateLimit } from '../middleware/rate-limit.js'; // Rate limiting
 
 const router: RouterType = Router();
 
 const CATEGORIES = ['quality', 'performance', 'accuracy', 'safety', 'ux'] as const;
 const SENTIMENTS = ['positive', 'neutral', 'negative'] as const;
 
+// Input length limits
 const createFeedbackSchema = z.object({
-  taskId: z.string().min(1),
-  agent: z.string().optional(),
+  taskId: z.string().min(1).max(100),
+  agent: z.string().max(100).optional(),
   rating: z.number().int().min(1).max(5),
   comment: z.string().max(5000).optional(),
   categories: z.array(z.enum(CATEGORIES)).optional(),
@@ -43,7 +45,8 @@ router.get(
   asyncHandler(async (req, res) => {
     const limit = qNum(req.query.limit);
     const resolvedRaw = qStr(req.query.resolved);
-    const resolved = resolvedRaw === 'true' ? true : resolvedRaw === 'false' ? false : undefined;
+    const resolved =
+      resolvedRaw === 'true' ? true : resolvedRaw === 'false' ? false : undefined;
 
     const items = await feedbackService.list({
       taskId: qStr(req.query.taskId),
@@ -103,6 +106,7 @@ router.get(
 
 router.post(
   '/',
+  writeRateLimit, // Rate limiting
   asyncHandler(async (req, res) => {
     const input = parseOrThrow(createFeedbackSchema, req.body);
     const item = await feedbackService.create(input);
@@ -114,6 +118,7 @@ router.post(
 
 router.put(
   '/:id',
+  writeRateLimit, // Rate limiting
   asyncHandler(async (req, res) => {
     const input = parseOrThrow(updateFeedbackSchema, req.body);
     const item = await feedbackService.update(paramStr(req.params.id), input);
@@ -126,6 +131,7 @@ router.put(
 
 router.delete(
   '/:id',
+  writeRateLimit, // Rate limiting
   asyncHandler(async (req, res) => {
     const deleted = await feedbackService.delete(paramStr(req.params.id));
     if (!deleted) throw new NotFoundError('Feedback not found');

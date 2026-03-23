@@ -10,13 +10,14 @@ const DelegationScopeSchema = z.object({
   priorities: z.array(z.enum(['critical', 'high', 'medium', 'low'])).optional(),
 });
 
+// Input length limits
 export const SetDelegationRequestSchema = z.object({
-  delegateAgent: z.string().min(1, 'Delegate agent is required'),
+  delegateAgent: z.string().min(1, 'Delegate agent is required').max(100),
   expires: z.string().datetime('Invalid ISO timestamp'),
   scope: DelegationScopeSchema,
   excludePriorities: z.array(z.enum(['critical', 'high', 'medium', 'low'])).optional(),
   excludeTags: z.array(z.string()).optional(),
-  createdBy: z.string().min(1, 'Creator name is required'),
+  createdBy: z.string().min(1, 'Creator name is required').max(100),
 });
 
 export type SetDelegationRequest = z.infer<typeof SetDelegationRequestSchema>;

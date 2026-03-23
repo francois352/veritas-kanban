@@ -14,6 +14,7 @@ import {
   type DriftBaselinesQuery,
 } from '../schemas/drift-schemas.js';
 import { getDriftService } from '../services/drift-service.js';
+import { writeRateLimit } from '../middleware/rate-limit.js'; // Rate limiting
 
 const router: RouterType = Router();
 
@@ -28,6 +29,7 @@ router.get(
 
 router.post(
   '/alerts/:id/acknowledge',
+  writeRateLimit, // Rate limiting
   validate({ params: DriftAlertParamsSchema }),
   asyncHandler(async (req: ValidatedRequest<DriftAlertParams>, res) => {
     const params = req.validated.params;
@@ -56,6 +58,7 @@ router.get(
 
 router.post(
   '/baselines/reset',
+  writeRateLimit, // Rate limiting
   validate({ body: DriftBaselineResetSchema }),
   asyncHandler(async (req: ValidatedRequest<unknown, unknown, DriftBaselineReset>, res) => {
     const body = req.validated.body;
@@ -71,6 +74,7 @@ router.post(
 
 router.post(
   '/analyze',
+  writeRateLimit, // Rate limiting
   validate({ body: DriftAnalyzeSchema }),
   asyncHandler(async (req: ValidatedRequest<unknown, unknown, DriftAnalyzeInput>, res) => {
     const body = req.validated.body;

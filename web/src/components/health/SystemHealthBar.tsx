@@ -153,9 +153,7 @@ export function SystemHealthBar() {
 
         {summary && (
           <>
-            <span className="opacity-40" aria-hidden="true">
-              |
-            </span>
+            <span className="opacity-40" aria-hidden="true">|</span>
             <span className="opacity-75">{summary}</span>
           </>
         )}

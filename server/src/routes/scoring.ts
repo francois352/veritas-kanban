@@ -4,6 +4,7 @@ import { asyncHandler } from '../middleware/async-handler.js';
 import { BadRequestError, NotFoundError, ValidationError } from '../middleware/error-handler.js';
 import { scoringService } from '../services/scoring-service.js';
 import { paramStr, qNum, qStr } from '../lib/query-helpers.js';
+import { writeRateLimit } from '../middleware/rate-limit.js'; // Rate limiting
 
 const router: RouterType = Router();
 
@@ -56,21 +57,23 @@ const scorerSchema = z.discriminatedUnion('type', [
   }),
 ]);
 
+// Input length limits
 const createProfileSchema = z.object({
-  name: z.string().min(1),
-  description: z.string().optional(),
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
   scorers: z.array(scorerSchema).min(1),
   compositeMethod: z.enum(['weightedAvg', 'minimum', 'geometricMean']),
 });
 
 const updateProfileSchema = createProfileSchema.partial();
 
+// Input length limits
 const evaluateSchema = z.object({
-  profileId: z.string().min(1),
-  action: z.string().optional(),
-  output: z.string().min(1),
-  agent: z.string().optional(),
-  taskId: z.string().optional(),
+  profileId: z.string().min(1).max(100),
+  action: z.string().max(10000).optional(),
+  output: z.string().min(1).max(10000),
+  agent: z.string().max(100).optional(),
+  taskId: z.string().max(100).optional(),
   metadata: z.record(z.unknown()).optional(),
 });
 
@@ -106,6 +109,7 @@ router.get(
 
 router.post(
   '/profiles',
+  writeRateLimit, // Rate limiting
   asyncHandler(async (req, res) => {
     const input = parseOrThrow(createProfileSchema, req.body);
     const profile = await scoringService.createProfile(input);
@@ -115,6 +119,7 @@ router.post(
 
 router.put(
   '/profiles/:id',
+  writeRateLimit, // Rate limiting
   asyncHandler(async (req, res) => {
     const input = parseOrThrow(updateProfileSchema, req.body);
     let profile;
@@ -135,6 +140,7 @@ router.put(
 
 router.delete(
   '/profiles/:id',
+  writeRateLimit, // Rate limiting
   asyncHandler(async (req, res) => {
     try {
       const deleted = await scoringService.deleteProfile(paramStr(req.params.id));
@@ -153,6 +159,7 @@ router.delete(
 
 router.post(
   '/evaluate',
+  writeRateLimit, // Rate limiting
   asyncHandler(async (req, res) => {
     const input = parseOrThrow(evaluateSchema, req.body);
     const result = await scoringService.evaluate(input);

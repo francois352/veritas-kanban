@@ -520,30 +520,4 @@ router.get(
   })
 );
 
-/**
- * POST /api/workflow-runs/:runId/steps/:stepId/complete — Complete a dispatched step
- * Called by agents when they finish work dispatched via the workflow engine.
- */
-router.post(
-  '/runs/:runId/steps/:stepId/complete',
-  asyncHandler(async (req: AuthenticatedRequest, res) => {
-    const runId = getStringParam(req.params.runId);
-    const stepId = getStringParam(req.params.stepId);
-
-    const { output } = req.body || {};
-
-    const run = await workflowRunService.completeStep(runId, stepId, output || {});
-
-    res.json({
-      success: true,
-      data: {
-        runId: run.id,
-        stepCompleted: stepId,
-        status: run.status,
-        currentStep: run.currentStep,
-      },
-    });
-  })
-);
-
 export { router as workflowRoutes };
