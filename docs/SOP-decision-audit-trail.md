@@ -94,41 +94,41 @@ curl -X PATCH http://localhost:3001/api/decisions/dec_abc123/assumptions/1 \
 
 ## API Endpoints
 
-| Method  | Path                                  | Description                           |
-| ------- | ------------------------------------- | ------------------------------------- |
-| `GET`   | `/api/decisions`                      | List decisions (filterable)           |
-| `POST`  | `/api/decisions`                      | Log a new decision                    |
-| `GET`   | `/api/decisions/:id`                  | Get a single decision                 |
-| `PATCH` | `/api/decisions/:id/assumptions/:idx` | Update a specific assumption by index |
+| Method  | Path                                       | Description                           |
+| ------- | ------------------------------------------ | ------------------------------------- |
+| `GET`   | `/api/decisions`                           | List decisions (filterable)           |
+| `POST`  | `/api/decisions`                           | Log a new decision                    |
+| `GET`   | `/api/decisions/:id`                       | Get a single decision                 |
+| `PATCH` | `/api/decisions/:id/assumptions/:idx`      | Update a specific assumption by index |
 
 ---
 
 ## Decision Object Schema
 
-| Field         | Type     | Required | Description                         |
-| ------------- | -------- | -------- | ----------------------------------- |
-| `decision`    | string   | ✅       | The decision made                   |
-| `confidence`  | number   | ✅       | 0–1 confidence score                |
-| `reasoning`   | string   | ❌       | Why this decision was made          |
-| `evidence`    | string[] | ❌       | Supporting evidence references      |
-| `assumptions` | string[] | ❌       | Assumptions the decision depends on |
-| `agent`       | string   | ✅       | Agent identifier                    |
-| `taskId`      | string   | ❌       | Associated task ID                  |
+| Field         | Type     | Required | Description                                         |
+| ------------- | -------- | -------- | --------------------------------------------------- |
+| `decision`    | string   | ✅       | The decision made                                   |
+| `confidence`  | number   | ✅       | 0–1 confidence score                                |
+| `reasoning`   | string   | ❌       | Why this decision was made                          |
+| `evidence`    | string[] | ❌       | Supporting evidence references                      |
+| `assumptions` | string[] | ❌       | Assumptions the decision depends on                 |
+| `agent`       | string   | ✅       | Agent identifier                                    |
+| `taskId`      | string   | ❌       | Associated task ID                                  |
 
 ---
 
 ## Query Parameters (List)
 
-| Param           | Type   | Description                               |
-| --------------- | ------ | ----------------------------------------- |
-| `agent`         | string | Filter by agent name                      |
-| `taskId`        | string | Filter by task ID                         |
-| `minConfidence` | number | Minimum confidence score (0–1)            |
-| `maxConfidence` | number | Maximum confidence score (0–1)            |
-| `since`         | string | ISO 8601 datetime — decisions after this  |
-| `until`         | string | ISO 8601 datetime — decisions before this |
-| `limit`         | number | Max records to return (default: 50)       |
-| `offset`        | number | Pagination offset                         |
+| Param           | Type   | Description                                  |
+| --------------- | ------ | -------------------------------------------- |
+| `agent`         | string | Filter by agent name                         |
+| `taskId`        | string | Filter by task ID                            |
+| `minConfidence` | number | Minimum confidence score (0–1)               |
+| `maxConfidence` | number | Maximum confidence score (0–1)               |
+| `since`         | string | ISO 8601 datetime — decisions after this     |
+| `until`         | string | ISO 8601 datetime — decisions before this    |
+| `limit`         | number | Max records to return (default: 50)          |
+| `offset`        | number | Pagination offset                            |
 
 ---
 

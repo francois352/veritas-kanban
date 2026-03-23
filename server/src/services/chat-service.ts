@@ -452,9 +452,20 @@ export class ChatService {
         const messageBlocks = content.split(/\n---\n/);
 
         for (const block of messageBlocks) {
-          if (!block.trim() || block.startsWith('# Squad Chat')) continue;
+          if (!block.trim()) continue;
 
-          const lines = block.trim().split('\n');
+          let b = block;
+          if (b.startsWith('# Squad Chat')) {
+            const idx = b.indexOf('\n\n');
+            if (idx !== -1) {
+              b = b.substring(idx + 2);
+            } else {
+              continue;
+            }
+          }
+          if (!b.trim()) continue;
+
+          const lines = b.trim().split('\n');
           const headerLine = lines[0];
           const normalizedHeader = headerLine.replace(/^##\s+/, '');
           const headerParts = normalizedHeader.split('|').map((part) => part.trim());

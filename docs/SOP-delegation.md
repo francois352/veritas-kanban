@@ -14,13 +14,13 @@ Configure and manage task delegation — temporarily routing new task assignment
 
 ## Concepts
 
-| Term                   | Definition                                                                                  |
-| ---------------------- | ------------------------------------------------------------------------------------------- |
-| **Delegate agent**     | The agent that receives tasks during the delegation period                                  |
-| **Expires**            | ISO timestamp when delegation automatically ends (must be in the future)                    |
-| **Scope**              | Which task categories are delegated: `all`, `unassigned`, or `matching` (specific criteria) |
-| **Exclude priorities** | Task priorities that are NOT delegated (e.g., don't delegate `critical` tasks)              |
-| **Exclude tags**       | Task tags that are NOT delegated                                                            |
+| Term | Definition |
+|------|------------|
+| **Delegate agent** | The agent that receives tasks during the delegation period |
+| **Expires** | ISO timestamp when delegation automatically ends (must be in the future) |
+| **Scope** | Which task categories are delegated: `all`, `unassigned`, or `matching` (specific criteria) |
+| **Exclude priorities** | Task priorities that are NOT delegated (e.g., don't delegate `critical` tasks) |
+| **Exclude tags** | Task tags that are NOT delegated |
 
 ## Step-by-Step: Set Up Delegation
 
@@ -51,7 +51,6 @@ curl -s -X POST http://localhost:3001/api/delegation \
 ```
 
 **Response:**
-
 ```json
 {
   "delegation": {
@@ -105,11 +104,11 @@ Revocation is logged in the audit log automatically.
 
 ## Scope Reference
 
-| Scope        | Behavior                                                             |
-| ------------ | -------------------------------------------------------------------- |
-| `all`        | All new task assignments go to the delegate (minus exclusions)       |
-| `unassigned` | Only tasks with no assigned agent go to the delegate                 |
-| `matching`   | Only tasks matching specific criteria (configure in `matchCriteria`) |
+| Scope | Behavior |
+|-------|----------|
+| `all` | All new task assignments go to the delegate (minus exclusions) |
+| `unassigned` | Only tasks with no assigned agent go to the delegate |
+| `matching` | Only tasks matching specific criteria (configure in `matchCriteria`) |
 
 ## Exclusion Reference
 
@@ -169,22 +168,22 @@ curl -s -X POST http://localhost:3001/api/delegation \
 
 ## API Endpoints Used
 
-| Method   | Path                  | Purpose                                      |
-| -------- | --------------------- | -------------------------------------------- |
-| `GET`    | `/api/delegation`     | Get current delegation settings              |
-| `POST`   | `/api/delegation`     | Set (or replace) delegation — requires admin |
-| `DELETE` | `/api/delegation`     | Revoke delegation — requires admin           |
-| `GET`    | `/api/delegation/log` | View delegation approval log                 |
+| Method | Path | Purpose |
+|--------|------|---------|
+| `GET` | `/api/delegation` | Get current delegation settings |
+| `POST` | `/api/delegation` | Set (or replace) delegation — requires admin |
+| `DELETE` | `/api/delegation` | Revoke delegation — requires admin |
+| `GET` | `/api/delegation/log` | View delegation approval log |
 
 ## Common Issues / Troubleshooting
 
-| Issue                                   | Cause                                 | Fix                                                            |
-| --------------------------------------- | ------------------------------------- | -------------------------------------------------------------- |
-| `403 Forbidden` on POST/DELETE          | Using a non-admin API key             | Switch to the admin key; check `authorize('admin')` config     |
-| `400 Expiry date must be in the future` | `expires` timestamp is in the past    | Use a future timestamp; check server timezone if unsure        |
-| `404` on DELETE                         | No active delegation to revoke        | Verify with `GET /api/delegation` first                        |
-| Delegation not routing tasks            | `scope` or exclusions too restrictive | Review exclusion list; test with a low-priority, untagged task |
-| Tasks going to wrong agent              | Delegation expired                    | Check `expires` timestamp; re-set delegation if needed         |
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| `403 Forbidden` on POST/DELETE | Using a non-admin API key | Switch to the admin key; check `authorize('admin')` config |
+| `400 Expiry date must be in the future` | `expires` timestamp is in the past | Use a future timestamp; check server timezone if unsure |
+| `404` on DELETE | No active delegation to revoke | Verify with `GET /api/delegation` first |
+| Delegation not routing tasks | `scope` or exclusions too restrictive | Review exclusion list; test with a low-priority, untagged task |
+| Tasks going to wrong agent | Delegation expired | Check `expires` timestamp; re-set delegation if needed |
 
 ## Related Docs
 

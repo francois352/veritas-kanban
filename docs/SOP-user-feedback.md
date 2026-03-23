@@ -145,30 +145,30 @@ curl -X DELETE http://localhost:3001/api/feedback/fb_abc123
 
 ## API Endpoints
 
-| Method   | Path                       | Description                                 |
-| -------- | -------------------------- | ------------------------------------------- |
-| `GET`    | `/api/feedback`            | List feedback (filterable)                  |
-| `POST`   | `/api/feedback`            | Submit new feedback                         |
-| `GET`    | `/api/feedback/analytics`  | Get analytics and sentiment breakdown       |
-| `GET`    | `/api/feedback/unresolved` | List unresolved feedback items              |
-| `GET`    | `/api/feedback/:id`        | Get a specific feedback item                |
-| `PUT`    | `/api/feedback/:id`        | Update feedback (rating, comment, resolved) |
-| `DELETE` | `/api/feedback/:id`        | Delete a feedback item                      |
+| Method   | Path                         | Description                                   |
+| -------- | ---------------------------- | --------------------------------------------- |
+| `GET`    | `/api/feedback`              | List feedback (filterable)                    |
+| `POST`   | `/api/feedback`              | Submit new feedback                           |
+| `GET`    | `/api/feedback/analytics`    | Get analytics and sentiment breakdown         |
+| `GET`    | `/api/feedback/unresolved`   | List unresolved feedback items                |
+| `GET`    | `/api/feedback/:id`          | Get a specific feedback item                  |
+| `PUT`    | `/api/feedback/:id`          | Update feedback (rating, comment, resolved)   |
+| `DELETE` | `/api/feedback/:id`          | Delete a feedback item                        |
 
 ---
 
 ## Query Parameters (List)
 
-| Param       | Type    | Description                                          |
-| ----------- | ------- | ---------------------------------------------------- |
-| `taskId`    | string  | Filter by task ID                                    |
-| `agent`     | string  | Filter by agent name                                 |
+| Param       | Type    | Description                                       |
+| ----------- | ------- | ------------------------------------------------- |
+| `taskId`    | string  | Filter by task ID                                 |
+| `agent`     | string  | Filter by agent name                              |
 | `category`  | string  | `quality`, `performance`, `accuracy`, `safety`, `ux` |
-| `sentiment` | string  | `positive`, `neutral`, `negative`                    |
-| `resolved`  | boolean | Filter by resolved status                            |
-| `since`     | string  | ISO 8601 — feedback submitted after this date        |
-| `until`     | string  | ISO 8601 — feedback submitted before this date       |
-| `limit`     | number  | Max records (default: 50)                            |
+| `sentiment` | string  | `positive`, `neutral`, `negative`                 |
+| `resolved`  | boolean | Filter by resolved status                         |
+| `since`     | string  | ISO 8601 — feedback submitted after this date     |
+| `until`     | string  | ISO 8601 — feedback submitted before this date    |
+| `limit`     | number  | Max records (default: 50)                         |
 
 ---
 

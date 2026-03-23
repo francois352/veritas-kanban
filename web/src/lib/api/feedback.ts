@@ -23,9 +23,7 @@ const buildParams = (filters: Record<string, unknown>): string => {
 
 export const feedbackApi = {
   list: async (filters?: FeedbackListFilters): Promise<Feedback[]> => {
-    const response = await fetch(
-      `${API_BASE}/feedback${buildParams((filters ?? {}) as Record<string, unknown>)}`
-    );
+    const response = await fetch(`${API_BASE}/feedback${buildParams((filters ?? {}) as Record<string, unknown>)}`);
     return handleResponse<Feedback[]>(response);
   },
 
@@ -63,9 +61,7 @@ export const feedbackApi = {
   },
 
   getAnalytics: async (filters?: FeedbackAnalyticsFilters): Promise<FeedbackAnalytics> => {
-    const response = await fetch(
-      `${API_BASE}/feedback/analytics${buildParams((filters ?? {}) as Record<string, unknown>)}`
-    );
+    const response = await fetch(`${API_BASE}/feedback/analytics${buildParams((filters ?? {}) as Record<string, unknown>)}`);
     return handleResponse<FeedbackAnalytics>(response);
   },
 

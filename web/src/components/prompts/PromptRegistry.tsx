@@ -4,16 +4,7 @@
  * Tabs: Templates, Versions, Usage, Stats, Preview
  */
 import { useState } from 'react';
-import {
-  usePromptTemplates,
-  usePromptTemplate,
-  useCreatePromptTemplate,
-  useDeletePromptTemplate,
-  usePromptVersionHistory,
-  usePromptUsageRecords,
-  usePromptStatsAll,
-  useRenderPromptPreview,
-} from '../../hooks/usePromptRegistry.js';
+import { usePromptTemplates, usePromptTemplate, useCreatePromptTemplate, useDeletePromptTemplate, usePromptVersionHistory, usePromptUsageRecords, usePromptStatsAll, useRenderPromptPreview } from '../../hooks/usePromptRegistry.js';
 import type { CreatePromptTemplateInput, PromptCategory } from '@veritas-kanban/shared';
 import styles from './PromptRegistry.module.css';
 
@@ -67,13 +58,7 @@ function TemplatesTab() {
     <div className={styles.tab}>
       <div className={styles.header}>
         <h3>Prompt Templates</h3>
-        <button
-          onClick={() => {
-            setIsEditing(true);
-            resetForm();
-          }}
-          className={styles.primaryBtn}
-        >
+        <button onClick={() => { setIsEditing(true); resetForm(); }} className={styles.primaryBtn}>
           + New Template
         </button>
       </div>
@@ -102,9 +87,7 @@ function TemplatesTab() {
             <label>Category *</label>
             <select
               value={formData.category}
-              onChange={(e) =>
-                setFormData({ ...formData, category: e.target.value as PromptCategory })
-              }
+              onChange={(e) => setFormData({ ...formData, category: e.target.value as PromptCategory })}
             >
               <option value="system">System</option>
               <option value="agent">Agent</option>
@@ -122,11 +105,7 @@ function TemplatesTab() {
             />
           </div>
           <div className={styles.formActions}>
-            <button
-              onClick={handleCreate}
-              className={styles.primaryBtn}
-              disabled={createMutation.isPending}
-            >
+            <button onClick={handleCreate} className={styles.primaryBtn} disabled={createMutation.isPending}>
               {createMutation.isPending ? 'Creating...' : 'Create'}
             </button>
             <button onClick={resetForm} className={styles.secondaryBtn}>
@@ -137,35 +116,28 @@ function TemplatesTab() {
       )}
 
       <div className={styles.list}>
-        {templates &&
-          templates.map((template) => (
-            <div
-              key={template.id}
-              className={`${styles.listItem} ${selectedId === template.id ? styles.selected : ''}`}
-              onClick={() => setSelectedId(template.id)}
-            >
-              <div className={styles.itemHeader}>
-                <h4>{template.name}</h4>
-                <span className={styles.badge}>{template.category}</span>
-              </div>
-              <p>{template.description || 'No description'}</p>
-              <div className={styles.itemMeta}>
-                <small>Variables: {template.variables.join(', ') || 'none'}</small>
-                <small>Updated: {new Date(template.updated).toLocaleDateString()}</small>
-              </div>
-              <div className={styles.itemActions}>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete(template.id);
-                  }}
-                  className={styles.dangerBtn}
-                >
-                  Delete
-                </button>
-              </div>
+        {templates && templates.map((template) => (
+          <div
+            key={template.id}
+            className={`${styles.listItem} ${selectedId === template.id ? styles.selected : ''}`}
+            onClick={() => setSelectedId(template.id)}
+          >
+            <div className={styles.itemHeader}>
+              <h4>{template.name}</h4>
+              <span className={styles.badge}>{template.category}</span>
             </div>
-          ))}
+            <p>{template.description || 'No description'}</p>
+            <div className={styles.itemMeta}>
+              <small>Variables: {template.variables.join(', ') || 'none'}</small>
+              <small>Updated: {new Date(template.updated).toLocaleDateString()}</small>
+            </div>
+            <div className={styles.itemActions}>
+              <button onClick={(e) => { e.stopPropagation(); handleDelete(template.id); }} className={styles.dangerBtn}>
+                Delete
+              </button>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
@@ -312,16 +284,10 @@ function StatsTab() {
                 </div>
                 <div className={styles.statItem}>
                   <label>Avg Tokens/Use</label>
-                  <span className={styles.statValue}>
-                    {(stat.averageTokensPerUsage ?? 0).toFixed(0)}
-                  </span>
+                  <span className={styles.statValue}>{(stat.averageTokensPerUsage ?? 0).toFixed(0)}</span>
                 </div>
               </div>
-              <small>
-                {stat.lastUsedAt
-                  ? `Last used: ${new Date(stat.lastUsedAt).toLocaleDateString()}`
-                  : 'Never used'}
-              </small>
+              <small>{stat.lastUsedAt ? `Last used: ${new Date(stat.lastUsedAt).toLocaleDateString()}` : 'Never used'}</small>
             </div>
           ))}
         </div>
@@ -342,7 +308,7 @@ function PreviewTab() {
   const { data: template } = usePromptTemplate(selectedId);
   const { data: preview } = useRenderPromptPreview(selectedId, sampleVariables);
 
-  return (
+    return (
     <div className={styles.tab}>
       <div className={styles.header}>
         <h3>Template Preview</h3>
@@ -373,9 +339,7 @@ function PreviewTab() {
                   <input
                     type="text"
                     value={sampleVariables[varName] || ''}
-                    onChange={(e) =>
-                      setSampleVariables({ ...sampleVariables, [varName]: e.target.value })
-                    }
+                    onChange={(e) => setSampleVariables({ ...sampleVariables, [varName]: e.target.value })}
                     placeholder={`Enter value for ${varName}`}
                   />
                 </div>

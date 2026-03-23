@@ -119,7 +119,9 @@ export function detectSentiment(text: string): Sentiment {
 // ─── Service ──────────────────────────────────────────────────────────────────
 
 export class FeedbackService {
-  private readonly feedbackDir = join(process.cwd(), 'storage', 'feedback');
+  private get feedbackDir(): string {
+    return join(process.cwd(), 'storage', 'feedback');
+  }
 
   private async ensureDirs(): Promise<void> {
     await mkdir(this.feedbackDir, { recursive: true });
@@ -127,8 +129,9 @@ export class FeedbackService {
 
   private feedbackPath(id: string): string {
     validatePathSegment(id);
-    const filePath = join(this.feedbackDir, `${id}.json`);
-    return ensureWithinBase(this.feedbackDir, filePath);
+    const dir = this.feedbackDir;
+    const filePath = join(dir, `${id}.json`);
+    return ensureWithinBase(dir, filePath);
   }
 
   private async readFeedbackFile(filePath: string): Promise<Feedback | null> {
@@ -216,7 +219,10 @@ export class FeedbackService {
       createdAt: existing.createdAt,
       updatedAt: new Date().toISOString(),
       // Re-run sentiment if comment changed
-      sentiment: input.comment !== undefined ? detectSentiment(input.comment) : existing.sentiment,
+      sentiment:
+        input.comment !== undefined
+          ? detectSentiment(input.comment)
+          : existing.sentiment,
     };
 
     const filePath = this.feedbackPath(id);
@@ -240,7 +246,9 @@ export class FeedbackService {
 
     const totalFeedback = allItems.length;
     const averageRating =
-      totalFeedback > 0 ? allItems.reduce((sum, item) => sum + item.rating, 0) / totalFeedback : 0;
+      totalFeedback > 0
+        ? allItems.reduce((sum, item) => sum + item.rating, 0) / totalFeedback
+        : 0;
 
     // Rating distribution (1–5)
     const ratingCounts: Record<number, number> = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };

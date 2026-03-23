@@ -21,7 +21,10 @@ export function WidgetWrapper({
 }: WidgetWrapperProps) {
   return (
     <div
-      className={cn('flex flex-col rounded-lg border bg-card overflow-hidden h-full', className)}
+      className={cn(
+        'flex flex-col rounded-lg border bg-card overflow-hidden h-full',
+        className
+      )}
     >
       {/* Widget Header — drag handle lives here */}
       <div

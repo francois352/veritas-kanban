@@ -25,11 +25,11 @@ This guide walks you through every self-hosting scenario — from running locall
 
 ## Prerequisites
 
-| Requirement | Version | Install                                                      |
-| ----------- | ------- | ------------------------------------------------------------ |
-| Node.js     | 22.0.0+ | https://nodejs.org or `nvm install 22`                       |
-| pnpm        | 9.0.0+  | `corepack enable && corepack prepare pnpm@9.15.4 --activate` |
-| Git         | any     | https://git-scm.com                                          |
+| Requirement | Version  | Install                                   |
+|-------------|----------|-------------------------------------------|
+| Node.js     | 22.0.0+  | https://nodejs.org or `nvm install 22`    |
+| pnpm        | 9.0.0+   | `corepack enable && corepack prepare pnpm@9.15.4 --activate` |
+| Git         | any      | https://git-scm.com                       |
 
 Verify:
 
@@ -60,11 +60,11 @@ cp server/.env.example server/.env
 
 The build produces:
 
-| Path           | Contents                                                |
-| -------------- | ------------------------------------------------------- |
-| `shared/dist/` | Shared TypeScript types and utilities                   |
-| `server/dist/` | Compiled Express API server                             |
-| `web/dist/`    | Static React frontend (served by Express in production) |
+| Path              | Contents                              |
+|-------------------|---------------------------------------|
+| `shared/dist/`    | Shared TypeScript types and utilities |
+| `server/dist/`    | Compiled Express API server           |
+| `web/dist/`       | Static React frontend (served by Express in production) |
 
 ---
 
@@ -386,8 +386,8 @@ services:
       - NODE_ENV=production
       - PORT=3001
       - DATA_DIR=/app/data
-      - VERITAS_ADMIN_KEY=your-secure-admin-key-here # ≥ 32 chars
-      - VERITAS_JWT_SECRET=your-jwt-secret-here # prevents session resets on restart
+      - VERITAS_ADMIN_KEY=your-secure-admin-key-here  # ≥ 32 chars
+      - VERITAS_JWT_SECRET=your-jwt-secret-here       # prevents session resets on restart
       # - CORS_ORIGINS=https://kanban.example.com
       # - TRUST_PROXY=1                               # if behind nginx/Caddy/Traefik
       # - VERITAS_API_KEYS=agent1:key1:agent,readonly:key2:read-only
@@ -476,11 +476,11 @@ VERITAS_API_KEYS=my-agent:vk_abc123:agent,dashboard:vk_xyz456:read-only
 
 Role permissions:
 
-| Role        | Access                                         |
-| ----------- | ---------------------------------------------- |
-| `admin`     | Full access to all endpoints                   |
-| `agent`     | Read/write tasks, run agents, manage worktrees |
-| `read-only` | GET endpoints only (view tasks, read config)   |
+| Role        | Access                                             |
+|-------------|----------------------------------------------------|
+| `admin`     | Full access to all endpoints                       |
+| `agent`     | Read/write tasks, run agents, manage worktrees     |
+| `read-only` | GET endpoints only (view tasks, read config)       |
 
 ### Authentication methods
 
@@ -515,17 +515,17 @@ All variables live in `server/.env` (copy from `server/.env.example`).
 
 ### Server
 
-| Variable    | Default     | Description                                                    |
-| ----------- | ----------- | -------------------------------------------------------------- |
-| `PORT`      | `3001`      | HTTP server port                                               |
-| `HOST`      | `127.0.0.1` | Bind address. Set `0.0.0.0` for LAN/container access           |
-| `NODE_ENV`  | —           | `production` for production. **Never `development` in Docker** |
-| `LOG_LEVEL` | `info`      | `trace` / `debug` / `info` / `warn` / `error` / `fatal`        |
+| Variable    | Default | Description                                              |
+|-------------|---------|----------------------------------------------------------|
+| `PORT`      | `3001`  | HTTP server port                                         |
+| `HOST`      | `127.0.0.1` | Bind address. Set `0.0.0.0` for LAN/container access |
+| `NODE_ENV`  | —       | `production` for production. **Never `development` in Docker** |
+| `LOG_LEVEL` | `info`  | `trace` / `debug` / `info` / `warn` / `error` / `fatal` |
 
 ### Authentication
 
 | Variable                        | Default     | Description                                                            |
-| ------------------------------- | ----------- | ---------------------------------------------------------------------- |
+|---------------------------------|-------------|------------------------------------------------------------------------|
 | `VERITAS_AUTH_ENABLED`          | `true`      | Enable authentication. Set `false` only for trusted local use          |
 | `VERITAS_ADMIN_KEY`             | —           | Admin API key. **Must be ≥ 32 chars.** Required for production         |
 | `VERITAS_API_KEYS`              | —           | Additional keys. Format: `name:key:role,name2:key2:role2`              |
@@ -535,35 +535,35 @@ All variables live in `server/.env` (copy from `server/.env.example`).
 
 ### Networking
 
-| Variable         | Default                     | Description                                                                  |
-| ---------------- | --------------------------- | ---------------------------------------------------------------------------- |
-| `CORS_ORIGINS`   | `http://localhost:3000,...` | Comma-separated allowed CORS origins                                         |
-| `TRUST_PROXY`    | —                           | Express proxy trust. Use `1` for single-hop (nginx/Caddy). `true` is blocked |
-| `RATE_LIMIT_MAX` | `300`                       | Max API requests/minute/IP (localhost exempt)                                |
+| Variable         | Default                         | Description                                                                 |
+|------------------|---------------------------------|-----------------------------------------------------------------------------|
+| `CORS_ORIGINS`   | `http://localhost:3000,...`     | Comma-separated allowed CORS origins                                        |
+| `TRUST_PROXY`    | —                               | Express proxy trust. Use `1` for single-hop (nginx/Caddy). `true` is blocked |
+| `RATE_LIMIT_MAX` | `300`                           | Max API requests/minute/IP (localhost exempt)                               |
 
 ### Data & Storage
 
-| Variable                   | Default              | Description                                             |
-| -------------------------- | -------------------- | ------------------------------------------------------- |
-| `VERITAS_DATA_DIR`         | `.veritas-kanban`    | Config, logs, internal state (relative to project root) |
-| `DATA_DIR`                 | `/app/data` (Docker) | Mapped data dir inside Docker container                 |
-| `TELEMETRY_RETENTION_DAYS` | `30`                 | Days to keep telemetry event files                      |
-| `TELEMETRY_COMPRESS_DAYS`  | `7`                  | Days after which telemetry files are gzip-compressed    |
+| Variable                   | Default              | Description                                              |
+|----------------------------|----------------------|----------------------------------------------------------|
+| `VERITAS_DATA_DIR`         | `.veritas-kanban`    | Config, logs, internal state (relative to project root)  |
+| `DATA_DIR`                 | `/app/data` (Docker) | Mapped data dir inside Docker container                  |
+| `TELEMETRY_RETENTION_DAYS` | `30`                 | Days to keep telemetry event files                       |
+| `TELEMETRY_COMPRESS_DAYS`  | `7`                  | Days after which telemetry files are gzip-compressed     |
 
 ### Frontend (build-time)
 
-| Variable             | Default | Description                                                                         |
-| -------------------- | ------- | ----------------------------------------------------------------------------------- |
-| `VITE_BASE_PATH`     | `/`     | Sub-path prefix for the frontend (e.g., `/kanban/`). Set at build time, not runtime |
-| `VITE_ALLOWED_HOSTS` | —       | Comma-separated hostnames allowed by Vite dev server (dev only). `*` allows all     |
+| Variable         | Default | Description                                                                          |
+|------------------|---------|--------------------------------------------------------------------------------------|
+| `VITE_BASE_PATH` | `/`     | Sub-path prefix for the frontend (e.g., `/kanban/`). Set at build time, not runtime |
+| `VITE_ALLOWED_HOSTS` | —   | Comma-separated hostnames allowed by Vite dev server (dev only). `*` allows all      |
 
 ### Integration
 
-| Variable                 | Default                  | Description                                     |
-| ------------------------ | ------------------------ | ----------------------------------------------- |
-| `CLAWDBOT_GATEWAY`       | `http://127.0.0.1:18789` | OpenClaw gateway URL for AI agent orchestration |
-| `VERITAS_WEBHOOK_URL`    | —                        | Push task/chat events to an external service    |
-| `VERITAS_WEBHOOK_SECRET` | —                        | HMAC-SHA256 secret for webhook payload signing  |
+| Variable                 | Default                      | Description                                      |
+|--------------------------|------------------------------|--------------------------------------------------|
+| `CLAWDBOT_GATEWAY`       | `http://127.0.0.1:18789`     | OpenClaw gateway URL for AI agent orchestration  |
+| `VERITAS_WEBHOOK_URL`    | —                            | Push task/chat events to an external service     |
+| `VERITAS_WEBHOOK_SECRET` | —                            | HMAC-SHA256 secret for webhook payload signing   |
 
 ---
 
@@ -678,4 +678,4 @@ curl -H "X-API-Key: your-admin-key" http://localhost:3001/api/auth/diagnostics
 
 ---
 
-_For general deployment (Docker, bare metal, systemd, reverse proxy) see also [docs/DEPLOYMENT.md](../DEPLOYMENT.md)._
+*For general deployment (Docker, bare metal, systemd, reverse proxy) see also [docs/DEPLOYMENT.md](../DEPLOYMENT.md).*

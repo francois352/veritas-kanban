@@ -159,31 +159,31 @@ curl -X DELETE http://localhost:3001/api/prompt-registry/tmpl_abc123
 
 ## API Endpoints
 
-| Method   | Path                                      | Description                          |
-| -------- | ----------------------------------------- | ------------------------------------ |
-| `GET`    | `/api/prompt-registry`                    | List all templates                   |
-| `POST`   | `/api/prompt-registry`                    | Create a new template                |
-| `GET`    | `/api/prompt-registry/:id`                | Get a template                       |
-| `PATCH`  | `/api/prompt-registry/:id`                | Update a template (auto-versions)    |
-| `DELETE` | `/api/prompt-registry/:id`                | Delete a template                    |
-| `GET`    | `/api/prompt-registry/:id/versions`       | List all versions of a template      |
-| `GET`    | `/api/prompt-registry/:id/usage`          | Get usage history                    |
-| `GET`    | `/api/prompt-registry/:id/stats`          | Get usage statistics                 |
-| `GET`    | `/api/prompt-registry/stats/all`          | Aggregate stats across all templates |
-| `POST`   | `/api/prompt-registry/:id/render-preview` | Render a preview with variables      |
-| `POST`   | `/api/prompt-registry/:id/record-usage`   | Record a usage event                 |
+| Method   | Path                                         | Description                          |
+| -------- | -------------------------------------------- | ------------------------------------ |
+| `GET`    | `/api/prompt-registry`                       | List all templates                   |
+| `POST`   | `/api/prompt-registry`                       | Create a new template                |
+| `GET`    | `/api/prompt-registry/:id`                   | Get a template                       |
+| `PATCH`  | `/api/prompt-registry/:id`                   | Update a template (auto-versions)    |
+| `DELETE` | `/api/prompt-registry/:id`                   | Delete a template                    |
+| `GET`    | `/api/prompt-registry/:id/versions`          | List all versions of a template      |
+| `GET`    | `/api/prompt-registry/:id/usage`             | Get usage history                    |
+| `GET`    | `/api/prompt-registry/:id/stats`             | Get usage statistics                 |
+| `GET`    | `/api/prompt-registry/stats/all`             | Aggregate stats across all templates |
+| `POST`   | `/api/prompt-registry/:id/render-preview`    | Render a preview with variables      |
+| `POST`   | `/api/prompt-registry/:id/record-usage`      | Record a usage event                 |
 
 ---
 
 ## Template Schema
 
-| Field         | Type   | Required | Description                                    |
-| ------------- | ------ | -------- | ---------------------------------------------- |
-| `name`        | string | ✅       | Template name                                  |
-| `description` | string | ❌       | What the template is for                       |
-| `category`    | enum   | ✅       | `system`, `agent`, `tool`, or `evaluation`     |
-| `content`     | string | ✅       | Template body with `{{variable}}` placeholders |
-| `changelog`   | string | ❌       | Description of changes (for update operations) |
+| Field         | Type   | Required | Description                                              |
+| ------------- | ------ | -------- | -------------------------------------------------------- |
+| `name`        | string | ✅       | Template name                                            |
+| `description` | string | ❌       | What the template is for                                 |
+| `category`    | enum   | ✅       | `system`, `agent`, `tool`, or `evaluation`               |
+| `content`     | string | ✅       | Template body with `{{variable}}` placeholders           |
+| `changelog`   | string | ❌       | Description of changes (for update operations)           |
 
 ---
 
