@@ -18,6 +18,7 @@ import { withFileLock } from './file-lock.js';
 import { createLogger } from '../lib/logger.js';
 import { ensureWithinBase, validatePathSegment } from '../utils/sanitize.js';
 import { NotFoundError } from '../middleware/error-handler.js';
+import { getTaskService } from './task-service.js';
 
 const log = createLogger('scoring-service');
 
@@ -233,7 +234,7 @@ export class ScoringService {
     }
   }
 
-  async listProfiles(): Promise<ScoringProfile[]> {
+  async listProfiles(query: { domain?: string; tags?: string[] } = {}): Promise<ScoringProfile[]> {
     await this.ensureDirs();
 
     const files = await readdir(this.profilesDir);
@@ -245,6 +246,13 @@ export class ScoringService {
 
     return profiles
       .filter((profile): profile is ScoringProfile => Boolean(profile))
+      .filter((profile) => !query.domain || profile.domain === query.domain)
+      .filter(
+        (profile) =>
+          !query.tags ||
+          query.tags.length === 0 ||
+          query.tags.every((tag) => profile.tags?.includes(tag))
+      )
       .sort((a, b) => {
         if (Boolean(b.builtIn) !== Boolean(a.builtIn)) {
           return Number(Boolean(b.builtIn)) - Number(Boolean(a.builtIn));
@@ -275,6 +283,8 @@ export class ScoringService {
       builtIn: false,
       created: now,
       updated: now,
+      tags: input.tags,
+      domain: input.domain,
     };
 
     const filePath = this.profilePath(id);
@@ -303,6 +313,8 @@ export class ScoringService {
       id: existing.id,
       builtIn: existing.builtIn,
       updated: new Date().toISOString(),
+      tags: input.tags !== undefined ? input.tags : existing.tags,
+      domain: input.domain !== undefined ? input.domain : existing.domain,
     };
 
     const filePath = this.profilePath(id);
@@ -524,6 +536,17 @@ export class ScoringService {
     const context = this.buildContext(input);
     const scores = profile.scorers.map((scorer) => this.evaluateScorer(scorer, context));
     const compositeScore = this.computeComposite(profile, scores);
+
+    let warning: string | undefined;
+    if (input.taskId && profile.domain) {
+      const task = await getTaskService().getTask(input.taskId);
+      if (task) {
+        if (task.type !== profile.domain && task.project !== profile.domain) {
+          warning = `Warning: Profile domain '${profile.domain}' does not match task type/project.`;
+        }
+      }
+    }
+
     const result: EvaluationResult = {
       id: `evaluation_${Date.now()}_${nanoid(6)}`,
       profileId: profile.id,
@@ -536,6 +559,7 @@ export class ScoringService {
       scores,
       compositeScore,
       created: new Date().toISOString(),
+      warning,
     };
 
     const filePath = this.evaluationPath(result.id);

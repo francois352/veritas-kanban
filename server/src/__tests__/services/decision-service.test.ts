@@ -195,6 +195,9 @@ describe('DecisionService', () => {
       assumptions: ['First assumption'],
     });
 
+    // Delay slightly to ensure updatedAt changes reliably
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
     const updated = await service.updateAssumption(decision.id, 0, {
       status: 'verified',
       note: 'Checked it myself',
