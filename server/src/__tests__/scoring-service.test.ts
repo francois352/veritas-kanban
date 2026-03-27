@@ -2,7 +2,17 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
+import { vi } from 'vitest';
 import { ScoringService } from '../services/scoring-service.js';
+import * as taskServiceModule from '../services/task-service.js';
+
+vi.mock('../services/task-service.js', () => {
+  return {
+    getTaskService: vi.fn().mockReturnValue({
+      getTask: vi.fn(),
+    }),
+  };
+});
 
 describe('ScoringService', () => {
   const originalCwd = process.cwd();
@@ -97,5 +107,37 @@ describe('ScoringService', () => {
     });
 
     expect(result.compositeScore).toBe(0);
+  });
+
+  it('evaluates task and returns a warning when profile domain does not match task type or project', async () => {
+    const mockTaskService = taskServiceModule.getTaskService();
+    vi.mocked(mockTaskService.getTask).mockResolvedValue({
+      id: 'TASK-1',
+      type: 'travel',
+      project: 'personal',
+    } as any);
+
+    const profile = await service.createProfile({
+      name: 'Code Profile',
+      domain: 'code',
+      compositeMethod: 'minimum',
+      scorers: [
+        {
+          id: 'pass',
+          name: 'Pass',
+          type: 'CustomExpression',
+          weight: 1,
+          expression: '1',
+        },
+      ],
+    });
+
+    const result = await service.evaluate({
+      profileId: profile.id,
+      output: 'test output',
+      taskId: 'TASK-1',
+    });
+
+    expect(result.warning).toBe("Warning: Profile domain 'code' does not match task type/project.");
   });
 });
