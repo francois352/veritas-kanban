@@ -29,7 +29,15 @@ describe('WorkflowService', () => {
   afterEach(async () => {
     process.chdir(originalCwd);
     delete process.env.DATA_DIR;
-    await rm(tempDir, { recursive: true, force: true });
+
+    // Slight delay to let any floating async file operations clear out
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    try {
+      await rm(tempDir, { recursive: true, force: true });
+    } catch (e) {
+      // ignore
+    }
   });
 
   const validWorkflow: WorkflowDefinition = {
