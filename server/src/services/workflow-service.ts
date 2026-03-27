@@ -32,7 +32,14 @@ export class WorkflowService {
     this.ensureDirectories();
   }
 
-  private async ensureDirectories(): Promise<void> {
+  private ensureDirectories(): void {
+    // Synchronously ensure dir in constructor, or trigger via init
+    fs.mkdir(this.workflowsDir, { recursive: true }).catch((err) => {
+      log.error({ err, dir: this.workflowsDir }, 'Failed to create workflows directory');
+    });
+  }
+
+  public async init(): Promise<void> {
     await fs.mkdir(this.workflowsDir, { recursive: true });
   }
 

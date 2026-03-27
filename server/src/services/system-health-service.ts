@@ -76,11 +76,13 @@ function buildAgentSignal(): AgentSignal {
     const offline = total - online;
 
     let status: 'ok' | 'warn' | 'critical';
+    const offlinePercent = total > 0 ? offline / total : 0;
+
     if (total === 0) {
       status = 'ok';
     } else if (offline === total) {
       status = 'critical';
-    } else if (offline > 0) {
+    } else if (offlinePercent > 0.25) {
       status = 'warn';
     } else {
       status = 'ok';
@@ -141,7 +143,9 @@ function determineLevel(
     (s) => s === 'warn'
   ).length;
 
-  if (warnings >= 2 || agents.offline > 0) return 'drifting';
+  const offlinePercent = agents.total > 0 ? agents.offline / agents.total : 0;
+  if (warnings >= 2 || offlinePercent > 0.5) return 'drifting';
+  if (offlinePercent > 0.25) return 'reviewing';
   if (warnings === 1) return 'reviewing';
   return 'stable';
 }

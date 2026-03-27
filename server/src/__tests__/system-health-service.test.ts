@@ -116,9 +116,7 @@ describe('SystemHealthService', () => {
   });
 
   it('returns elevated when all agents are offline', async () => {
-    listAgentsSpy.mockReturnValue([
-      { id: 'agent-1', status: 'offline' },
-    ]);
+    listAgentsSpy.mockReturnValue([{ id: 'agent-1', status: 'offline' }]);
 
     const status = await service.getStatus();
 
@@ -126,16 +124,51 @@ describe('SystemHealthService', () => {
     expect(status.status).toBe('elevated');
   });
 
-  it('returns drifting when some agents are offline', async () => {
-    listAgentsSpy.mockReturnValue([
-      { id: 'agent-1', status: 'online' },
-      { id: 'agent-2', status: 'offline' },
-    ]);
+  it('returns drifting when >50% agents are offline', async () => {
+    // 12 agents, 8 offline -> 67% offline -> drifting
+    const agents = Array(12)
+      .fill(null)
+      .map((_, i) => ({
+        id: `agent-${i}`,
+        status: i < 4 ? 'online' : 'offline', // 4 online, 8 offline
+      }));
+    listAgentsSpy.mockReturnValue(agents);
 
     const status = await service.getStatus();
 
     expect(status.signals.agents.status).toBe('warn');
     expect(status.status).toBe('drifting');
+  });
+
+  it('returns reviewing when >25% agents are offline', async () => {
+    // 12 agents, 4 offline -> 33% offline -> reviewing
+    const agents = Array(12)
+      .fill(null)
+      .map((_, i) => ({
+        id: `agent-${i}`,
+        status: i < 8 ? 'online' : 'offline', // 8 online, 4 offline
+      }));
+    listAgentsSpy.mockReturnValue(agents);
+
+    const status = await service.getStatus();
+
+    expect(status.signals.agents.status).toBe('warn');
+    expect(status.status).toBe('reviewing');
+  });
+
+  it('returns stable when <=25% agents are offline', async () => {
+    // 12 agents, 2 offline -> 17% offline -> stable
+    const agents = Array(12)
+      .fill(null)
+      .map((_, i) => ({
+        id: `agent-${i}`,
+        status: i < 10 ? 'online' : 'offline', // 10 online, 2 offline
+      }));
+    listAgentsSpy.mockReturnValue(agents);
+
+    const status = await service.getStatus();
+
+    expect(status.status).toBe('stable');
   });
 
   it('returns ok for agents when no agents exist', async () => {
@@ -163,7 +196,7 @@ describe('SystemHealthService', () => {
   });
 
   it('returns alert when operations status is critical (successRate < 50%)', async () => {
-     getRunMetricsSpy.mockResolvedValue({
+    getRunMetricsSpy.mockResolvedValue({
       runs: 10,
       successRate: 0.49,
       failures: 5,
@@ -213,7 +246,9 @@ describe('SystemHealthService', () => {
   });
 
   it('handles registry read failure gracefully', async () => {
-    listAgentsSpy.mockImplementation(() => { throw new Error('DB Down'); });
+    listAgentsSpy.mockImplementation(() => {
+      throw new Error('DB Down');
+    });
 
     const status = await service.getStatus();
     expect(status.signals.agents.status).toBe('ok');
