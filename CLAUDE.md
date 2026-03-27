@@ -124,6 +124,14 @@ Dashboard: https://bot.srv929662.hstgr.cloud/kanban/
 
 **Enforcement gates are ON**: assignedTo required, closing comments required, auto time-tracking enabled.
 
+### Additional Protocol Rules
+
+- **Sprint tagging**: Every new task MUST be tagged with the current sprint: `kanban sprint-assign <id> <sprint-id>`
+- **Dependencies**: If task B depends on task A, declare it at creation. Check `kanban deps <id>` before starting.
+- **Prompt templates**: 10 registered templates available via `GET /api/v1/prompt-registry`. Use them for worker handoffs, cross-model reviews, sprint planning, standup summaries.
+- **Efficient polling**: Use `GET /api/v1/changes?since=<ISO-timestamp>` instead of full task list scans. Supports ETag caching (304 responses are rate-limit-exempt).
+- **Feedback**: After completing a review, rate the work: `kanban rate <id> <1-5> "comment"`
+
 ---
 
 ## File Locations
