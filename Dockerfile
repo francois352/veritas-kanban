@@ -63,7 +63,8 @@ RUN pnpm --filter @veritas-kanban/server build
 # ---------------------------------------------------------------------------
 FROM node:22-alpine AS production
 
-RUN corepack enable && corepack prepare pnpm@9.15.4 --activate
+RUN corepack enable && corepack prepare pnpm@9.15.4 --activate && \
+    apk add --no-cache git
 
 # Security: run as non-root
 RUN addgroup -g 1001 -S nodejs && \
