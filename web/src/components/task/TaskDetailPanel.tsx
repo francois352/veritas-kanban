@@ -114,7 +114,7 @@ export function TaskDetailPanel({
               <Input
                 value={localTask.title}
                 onChange={(e) => updateField('title', e.target.value)}
-                className="text-xl font-semibold border-0 px-0 focus-visible:ring-0 bg-transparent"
+                className="text-xl font-semibold border-0 px-2 py-1 focus-visible:ring-1 focus-visible:ring-ring bg-muted/50 rounded-md"
                 placeholder="Task title..."
                 aria-label="Task title"
               />
