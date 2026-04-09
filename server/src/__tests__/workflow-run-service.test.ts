@@ -17,6 +17,8 @@ describe('WorkflowRunService', () => {
     const runDir = join(tempDir, 'dummy-cwd');
     const fs = await import('fs/promises');
     await fs.mkdir(runDir, { recursive: true });
+    // Avoid race with WorkflowService constructor's async ensureDirectories()
+    await fs.mkdir(join(tempDir, '.veritas-kanban', 'workflows'), { recursive: true });
     process.chdir(runDir);
 
     vi.resetModules();
@@ -32,24 +34,24 @@ describe('WorkflowRunService', () => {
             }
             return {
               output: `Output from ${step.id}`,
-              outputPath: `/fake/path/to/${step.id}.md`
+              outputPath: `/fake/path/to/${step.id}.md`,
             };
           }
-        }
+        },
       };
     });
 
     // Mock the permission check dynamic import for getStats
     vi.doMock('../middleware/workflow-auth.js', () => {
       return {
-        checkWorkflowPermission: async () => true // always grant permission for tests
+        checkWorkflowPermission: async () => true, // always grant permission for tests
       };
     });
 
     // Mock the broadcast-service so it doesn't fail on WebSocket setup
     vi.doMock('../services/broadcast-service.js', () => {
       return {
-        broadcastWorkflowStatus: vi.fn()
+        broadcastWorkflowStatus: vi.fn(),
       };
     });
 
@@ -57,8 +59,8 @@ describe('WorkflowRunService', () => {
     vi.doMock('../services/task-service.js', () => {
       return {
         getTaskService: () => ({
-          getTask: async (id: string) => ({ id, title: 'Fake Task' })
-        })
+          getTask: async (id: string) => ({ id, title: 'Fake Task' }),
+        }),
       };
     });
 
@@ -74,9 +76,7 @@ describe('WorkflowRunService', () => {
       name: 'Test Workflow Run',
       version: 1,
       description: 'A test workflow run',
-      agents: [
-        { id: 'agent1', name: 'Agent 1', role: 'developer', description: 'Test agent' }
-      ],
+      agents: [{ id: 'agent1', name: 'Agent 1', role: 'developer', description: 'Test agent' }],
       steps: [
         {
           id: 'step1',
@@ -84,16 +84,16 @@ describe('WorkflowRunService', () => {
           type: 'agent',
           agent: 'agent1',
           input: 'Do something',
-          on_fail: { escalate_to: 'human' }
+          on_fail: { escalate_to: 'human' },
         },
         {
           id: 'step2',
           name: 'Step 2',
           type: 'agent',
           agent: 'agent1',
-          input: 'Do something else'
-        }
-      ]
+          input: 'Do something else',
+        },
+      ],
     });
   });
 
@@ -112,7 +112,7 @@ describe('WorkflowRunService', () => {
     expect(run.status).toBe('running');
 
     // Wait for async execution to complete
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     const completedRun = await service.getRun(run.id);
     expect(completedRun.status).toBe('completed');
@@ -126,7 +126,7 @@ describe('WorkflowRunService', () => {
     await service.startRun('test-workflow-run', 'task-1');
     await service.startRun('test-workflow-run', 'task-2');
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     const runs = await service.listRuns();
     expect(runs).toHaveLength(2);
@@ -139,10 +139,10 @@ describe('WorkflowRunService', () => {
   it('blocks a run on failure and resumes it', async () => {
     // Inject a failure instruction into context
     const run = await service.startRun('test-workflow-run', undefined, {
-      _failStep: 'step1'
+      _failStep: 'step1',
     });
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     let blockedRun = await service.getRun(run.id);
     expect(blockedRun.status).toBe('blocked');
@@ -153,7 +153,7 @@ describe('WorkflowRunService', () => {
     await service.resumeRun(run.id, { _failStep: null });
 
     // Wait for async execution to complete
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     const completedRun = await service.getRun(run.id);
     expect(completedRun.status).toBe('completed');
@@ -163,7 +163,7 @@ describe('WorkflowRunService', () => {
   it('gets stats', async () => {
     await service.startRun('test-workflow-run');
 
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise((resolve) => setTimeout(resolve, 100));
 
     const stats = await service.getStats('24h', 'user-1');
 

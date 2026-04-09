@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtemp, rm } from 'fs/promises';
+import { mkdir, mkdtemp, rm } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { WorkflowService } from '../services/workflow-service.js';
@@ -23,6 +23,7 @@ describe('WorkflowService', () => {
     // Let's set the process.env.DATA_DIR to our temp directory to force it
     // exactly without relying on process.cwd() fallback logic from findUp.
     process.env.DATA_DIR = tempDir;
+    await mkdir(join(tempDir, '.veritas-kanban', 'workflows'), { recursive: true });
     service = new WorkflowService();
   });
 
@@ -37,18 +38,16 @@ describe('WorkflowService', () => {
     name: 'Test Workflow',
     version: 1,
     description: 'A test workflow',
-    agents: [
-      { id: 'agent1', name: 'Agent 1', role: 'developer', description: 'Test agent' }
-    ],
+    agents: [{ id: 'agent1', name: 'Agent 1', role: 'developer', description: 'Test agent' }],
     steps: [
       {
         id: 'step1',
         name: 'Step 1',
         type: 'agent',
         agent: 'agent1',
-        input: 'Do something'
-      }
-    ]
+        input: 'Do something',
+      },
+    ],
   };
 
   it('saves and loads a workflow', async () => {
@@ -74,8 +73,8 @@ describe('WorkflowService', () => {
 
     const list = await service.listWorkflows();
     expect(list).toHaveLength(2);
-    expect(list.map(w => w.id)).toContain('test-workflow');
-    expect(list.map(w => w.id)).toContain('test-workflow-2');
+    expect(list.map((w) => w.id)).toContain('test-workflow');
+    expect(list.map((w) => w.id)).toContain('test-workflow-2');
   });
 
   it('lists workflow metadata', async () => {
@@ -96,7 +95,7 @@ describe('WorkflowService', () => {
       id: validWorkflow.id,
       name: validWorkflow.name,
       version: validWorkflow.version,
-      description: validWorkflow.description
+      description: validWorkflow.description,
     });
   });
 
@@ -120,7 +119,7 @@ describe('WorkflowService', () => {
       editors: ['user2'],
       viewers: ['user3'],
       executors: ['user4'],
-      isPublic: false
+      isPublic: false,
     };
 
     await service.saveACL(acl);
@@ -143,7 +142,7 @@ describe('WorkflowService', () => {
       timestamp: new Date().toISOString(),
       userId: 'user1',
       action: 'create' as const,
-      workflowId: 'test-workflow'
+      workflowId: 'test-workflow',
     };
 
     await service.auditChange(event);
@@ -162,9 +161,11 @@ describe('WorkflowService', () => {
       version: 1,
       description: 'An invalid workflow',
       agents: [],
-      steps: []
+      steps: [],
     } as any;
 
-    await expect(service.saveWorkflow(invalidWorkflow)).rejects.toThrow('Workflow ID contains illegal path characters');
+    await expect(service.saveWorkflow(invalidWorkflow)).rejects.toThrow(
+      'Workflow ID contains illegal path characters'
+    );
   });
 });
