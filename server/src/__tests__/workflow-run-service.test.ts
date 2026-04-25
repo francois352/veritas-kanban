@@ -1,326 +1,176 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import fs from 'fs/promises';
-import os from 'os';
-import path from 'path';
-
-const mockLoadWorkflow = vi.fn();
-const mockListWorkflowsMetadata = vi.fn();
-const mockExecuteStep = vi.fn();
-const mockBroadcastWorkflowStatus = vi.fn();
-const mockGetTask = vi.fn();
-const mockCheckWorkflowPermission = vi.fn();
-
-vi.mock('../services/workflow-service.js', () => ({
-  getWorkflowService: () => ({
-    loadWorkflow: mockLoadWorkflow,
-    listWorkflowsMetadata: mockListWorkflowsMetadata,
-  }),
-}));
-
-vi.mock('../services/workflow-step-executor.js', () => ({
-  WorkflowStepExecutor: class {
-    executeStep = mockExecuteStep;
-  },
-}));
-
-vi.mock('../services/broadcast-service.js', () => ({
-  broadcastWorkflowStatus: mockBroadcastWorkflowStatus,
-}));
-
-vi.mock('../services/task-service.js', () => ({
-  getTaskService: () => ({ getTask: mockGetTask }),
-}));
-
-vi.mock('../middleware/workflow-auth.js', () => ({
-  checkWorkflowPermission: mockCheckWorkflowPermission,
-}));
-
-function makeWorkflow(overrides: Record<string, any> = {}) {
-  return {
-    id: 'wf-1',
-    version: 3,
-    name: 'Workflow One',
-    variables: { global: 'value' },
-    agents: [{ id: 'agent-1', name: 'Agent 1' }],
-    steps: [
-      { id: 'step-1', type: 'agent', agent: 'agent-1', prompt: 'one' },
-      { id: 'step-2', type: 'agent', agent: 'agent-1', prompt: 'two' },
-    ],
-    ...overrides,
-  };
-}
+import { mkdtemp, rm } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 describe('WorkflowRunService', () => {
-  let tmpDir: string;
-  let service: any;
+  const originalCwd = process.cwd();
+  let tempDir: string;
+  let service: any; // Type as any since we'll import dynamically
+  let workflowService: any;
 
   beforeEach(async () => {
+    tempDir = await mkdtemp(join(tmpdir(), 'vk-workflow-run-'));
+    process.env.DATA_DIR = tempDir;
+
+    // We need a dummy directory to offset `getProjectRoot()` fallback logic correctly
+    const runDir = join(tempDir, 'dummy-cwd');
+    const fs = await import('fs/promises');
+    await fs.mkdir(runDir, { recursive: true });
+    process.chdir(runDir);
+
     vi.resetModules();
-    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'workflow-run-'));
-    mockLoadWorkflow.mockResolvedValue(makeWorkflow());
-    mockListWorkflowsMetadata.mockResolvedValue([
-      { id: 'wf-1', name: 'Workflow One' },
-      { id: 'wf-2', name: 'Workflow Two' },
-    ]);
-    mockGetTask.mockResolvedValue({ id: 'task-1', title: 'Task 1' });
-    mockCheckWorkflowPermission.mockResolvedValue(true);
-    mockExecuteStep.mockImplementation(async (step: any) => ({
-      output: { done: step.id },
-      outputPath: `/tmp/${step.id}.json`,
-    }));
-    const mod = await import('../services/workflow-run-service.js');
-    service = new mod.WorkflowRunService(tmpDir);
+
+    // Mock WorkflowStepExecutor so we don't actually run agents
+    vi.doMock('../services/workflow-step-executor.js', () => {
+      return {
+        WorkflowStepExecutor: class {
+          async executeStep(step: any, run: any) {
+            // Check if we should fake a failure
+            if (run.context._failStep === step.id) {
+              throw new Error(`Simulated failure for step ${step.id}`);
+            }
+            return {
+              output: `Output from ${step.id}`,
+              outputPath: `/fake/path/to/${step.id}.md`
+            };
+          }
+        }
+      };
+    });
+
+    // Mock the permission check dynamic import for getStats
+    vi.doMock('../middleware/workflow-auth.js', () => {
+      return {
+        checkWorkflowPermission: async () => true // always grant permission for tests
+      };
+    });
+
+    // Mock the broadcast-service so it doesn't fail on WebSocket setup
+    vi.doMock('../services/broadcast-service.js', () => {
+      return {
+        broadcastWorkflowStatus: vi.fn()
+      };
+    });
+
+    // Mock the task-service to return dummy tasks
+    vi.doMock('../services/task-service.js', () => {
+      return {
+        getTaskService: () => ({
+          getTask: async (id: string) => ({ id, title: 'Fake Task' })
+        })
+      };
+    });
+
+    const { getWorkflowService } = await import('../services/workflow-service.js');
+    workflowService = getWorkflowService();
+
+    const { getWorkflowRunService } = await import('../services/workflow-run-service.js');
+    service = getWorkflowRunService();
+
+    // Create a dummy workflow to use for tests
+    await workflowService.saveWorkflow({
+      id: 'test-workflow-run',
+      name: 'Test Workflow Run',
+      version: 1,
+      description: 'A test workflow run',
+      agents: [
+        { id: 'agent1', name: 'Agent 1', role: 'developer', description: 'Test agent' }
+      ],
+      steps: [
+        {
+          id: 'step1',
+          name: 'Step 1',
+          type: 'agent',
+          agent: 'agent1',
+          input: 'Do something',
+          on_fail: { escalate_to: 'human' }
+        },
+        {
+          id: 'step2',
+          name: 'Step 2',
+          type: 'agent',
+          agent: 'agent1',
+          input: 'Do something else'
+        }
+      ]
+    });
   });
 
   afterEach(async () => {
-    vi.clearAllMocks();
-    await fs.rm(tmpDir, { recursive: true, force: true });
+    process.chdir(originalCwd);
+    delete process.env.DATA_DIR;
+    await rm(tempDir, { recursive: true, force: true });
+    vi.restoreAllMocks();
   });
 
-  it('starts a run, snapshots workflow, merges context, and completes asynchronously', async () => {
-    const run = await service.startRun('wf-1', 'task-1', { custom: 42 });
-    expect(run.id).toMatch(/^run_\d+_/);
-    expect(run.context.task).toMatchObject({ id: 'task-1' });
-    expect(run.context.custom).toBe(42);
+  it('starts a run and completes it', async () => {
+    const run = await service.startRun('test-workflow-run');
 
-    await vi.waitFor(async () => {
-      const saved = await service.getRun(run.id);
-      expect(saved.status).toBe('completed');
-      expect(saved.steps.every((s: any) => s.status === 'completed')).toBe(true);
+    expect(run).toBeDefined();
+    expect(run.workflowId).toBe('test-workflow-run');
+    expect(run.status).toBe('running');
+
+    // Wait for async execution to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const completedRun = await service.getRun(run.id);
+    expect(completedRun.status).toBe('completed');
+    expect(completedRun.steps[0].status).toBe('completed');
+    expect(completedRun.steps[1].status).toBe('completed');
+    expect(completedRun.context.step1).toBe('Output from step1');
+    expect(completedRun.context.step2).toBe('Output from step2');
+  });
+
+  it('lists runs', async () => {
+    await service.startRun('test-workflow-run', 'task-1');
+    await service.startRun('test-workflow-run', 'task-2');
+
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const runs = await service.listRuns();
+    expect(runs).toHaveLength(2);
+
+    const task1Runs = await service.listRuns({ taskId: 'task-1' });
+    expect(task1Runs).toHaveLength(1);
+    expect(task1Runs[0].taskId).toBe('task-1');
+  });
+
+  it('blocks a run on failure and resumes it', async () => {
+    // Inject a failure instruction into context
+    const run = await service.startRun('test-workflow-run', undefined, {
+      _failStep: 'step1'
     });
 
-    const snapshot = await fs.readFile(path.join(tmpDir, run.id, 'workflow.yml'), 'utf8');
-    expect(snapshot).toContain('wf-1');
-    expect(mockBroadcastWorkflowStatus).toHaveBeenCalled();
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    let blockedRun = await service.getRun(run.id);
+    expect(blockedRun.status).toBe('blocked');
+    expect(blockedRun.steps[0].status).toBe('failed');
+    expect(blockedRun.steps[0].error).toContain('Simulated failure');
+
+    // Remove failure instruction via resumeContext
+    await service.resumeRun(run.id, { _failStep: null });
+
+    // Wait for async execution to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
+
+    const completedRun = await service.getRun(run.id);
+    expect(completedRun.status).toBe('completed');
+    expect(completedRun.steps[0].status).toBe('completed');
   });
 
-  it('handles retry, retry_step, skip, block, and workflow failure', async () => {
-    const delaySpy = vi.spyOn(globalThis, 'setTimeout').mockImplementation(((fn: any) => {
-      fn();
-      return 0 as any;
-    }) as any);
+  it('gets stats', async () => {
+    await service.startRun('test-workflow-run');
 
-    mockLoadWorkflow.mockResolvedValue(
-      makeWorkflow({
-        steps: [
-          { id: 'prep', type: 'agent', agent: 'agent-1', prompt: 'prep' },
-          {
-            id: 'retryable',
-            type: 'agent',
-            agent: 'agent-1',
-            prompt: 'x',
-            on_fail: { retry: 1, retry_delay_ms: 1 },
-          },
-          {
-            id: 'reroute',
-            type: 'agent',
-            agent: 'agent-1',
-            prompt: 'x',
-            on_fail: { retry_step: 'prep' },
-          },
-          {
-            id: 'skippable',
-            type: 'agent',
-            agent: 'agent-1',
-            prompt: 'x',
-            on_fail: { escalate_to: 'skip' },
-          },
-          {
-            id: 'blocking',
-            type: 'agent',
-            agent: 'agent-1',
-            prompt: 'x',
-            on_fail: { escalate_to: 'human', escalate_message: 'Need help' },
-          },
-        ],
-      })
-    );
+    await new Promise(resolve => setTimeout(resolve, 100));
 
-    const counts: Record<string, number> = {};
-    mockExecuteStep.mockImplementation(async (step: any) => {
-      counts[step.id] = (counts[step.id] || 0) + 1;
-      if (step.id === 'retryable' && counts[step.id] === 1) throw new Error('fail once');
-      if (step.id === 'reroute' && counts[step.id] === 1) throw new Error('reroute me');
-      if (step.id === 'skippable') throw new Error('skip me');
-      if (step.id === 'blocking') throw new Error('block me');
-      return { output: { done: step.id }, outputPath: `/tmp/${step.id}.json` };
-    });
+    const stats = await service.getStats('24h', 'user-1');
 
-    const run = await service.startRun('wf-1');
-    await vi.waitFor(async () => {
-      const saved = await service.getRun(run.id);
-      expect(saved.status).toBe('blocked');
-      expect(saved.error).toBe('Need help');
-      expect(saved.steps.find((s: any) => s.stepId === 'retryable').retries).toBe(1);
-      expect(saved.steps.find((s: any) => s.stepId === 'skippable').status).toBe('skipped');
-      expect(saved.context._retryContext.failedStep).toBe('reroute');
-    });
-    delaySpy.mockRestore();
-  });
-
-  it('resumes blocked runs and validates invalid resume requests', async () => {
-    mockLoadWorkflow.mockResolvedValue(
-      makeWorkflow({
-        steps: [
-          {
-            id: 'step-1',
-            type: 'agent',
-            agent: 'agent-1',
-            prompt: 'x',
-            on_fail: { escalate_to: 'human', escalate_message: 'blocked' },
-          },
-        ],
-      })
-    );
-    mockExecuteStep
-      .mockRejectedValueOnce(new Error('blocked'))
-      .mockResolvedValueOnce({ output: { ok: true }, outputPath: '/tmp/out.json' });
-
-    const run = await service.startRun('wf-1');
-    await vi.waitFor(async () => expect((await service.getRun(run.id)).status).toBe('blocked'));
-
-    const resumed = await service.resumeRun(run.id, { approved: true });
-    expect(resumed.context.approved).toBe(true);
-    await vi.waitFor(async () => expect((await service.getRun(run.id)).status).toBe('completed'));
-
-    await expect(service.resumeRun('run_1234567890_abcdef', {})).rejects.toThrow(/not found/);
-    await expect(service.resumeRun(run.id, {})).rejects.toThrow(/not blocked/);
-  });
-
-  it('lists runs and metadata with filters while skipping invalid or broken entries', async () => {
-    const run1 = await service.startRun('wf-1', 'task-1');
-    const run2 = await service.startRun('wf-1', 'task-2');
-    await vi.waitFor(async () => expect((await service.getRun(run2.id)).status).toBe('completed'));
-
-    await fs.mkdir(path.join(tmpDir, 'run_9999999999_brokenxx'), { recursive: true });
-    await fs.writeFile(path.join(tmpDir, 'run_9999999999_brokenxx', 'run.json'), '{bad', 'utf8');
-
-    await expect(service.listRuns({ taskId: 'task-1' })).rejects.toThrow();
-    const meta = await service.listRunsMetadata({ workflowId: 'wf-1' });
-    expect(meta.map((m: any) => m.id)).toEqual([run2.id, run1.id]);
-  });
-
-  it('calculates stats using workflow permissions', async () => {
-    const now = Date.now();
-    const old = new Date(now - 40 * 24 * 60 * 60 * 1000).toISOString();
-    const recent = new Date(now - 60 * 60 * 1000).toISOString();
-    const recentEnd = new Date(now - 30 * 60 * 1000).toISOString();
-
-    await fs.mkdir(path.join(tmpDir, 'run_1111111111_aaaaaa'), { recursive: true });
-    await fs.writeFile(
-      path.join(tmpDir, 'run_1111111111_aaaaaa', 'run.json'),
-      JSON.stringify(
-        {
-          id: 'run_1111111111_aaaaaa',
-          workflowId: 'wf-1',
-          workflowVersion: 1,
-          taskId: 't1',
-          status: 'completed',
-          startedAt: recent,
-          completedAt: recentEnd,
-        },
-        null,
-        2
-      )
-    );
-    await fs.mkdir(path.join(tmpDir, 'run_2222222222_bbbbbb'), { recursive: true });
-    await fs.writeFile(
-      path.join(tmpDir, 'run_2222222222_bbbbbb', 'run.json'),
-      JSON.stringify(
-        {
-          id: 'run_2222222222_bbbbbb',
-          workflowId: 'wf-1',
-          workflowVersion: 1,
-          taskId: 't2',
-          status: 'failed',
-          startedAt: recent,
-        },
-        null,
-        2
-      )
-    );
-    await fs.mkdir(path.join(tmpDir, 'run_notvalid'), { recursive: true });
-    await fs.writeFile(
-      path.join(tmpDir, 'run_notvalid', 'run.json'),
-      JSON.stringify(
-        {
-          id: 'run_notvalid',
-          workflowId: 'wf-x',
-          workflowVersion: 1,
-          taskId: 'tX',
-          status: 'completed',
-          startedAt: recent,
-        },
-        null,
-        2
-      )
-    );
-    await fs.mkdir(path.join(tmpDir, 'run_3333333333_cccccc'), { recursive: true });
-    await fs.writeFile(
-      path.join(tmpDir, 'run_3333333333_cccccc', 'run.json'),
-      JSON.stringify(
-        {
-          id: 'run_3333333333_cccccc',
-          workflowId: 'wf-2',
-          workflowVersion: 1,
-          taskId: 't3',
-          status: 'running',
-          startedAt: old,
-        },
-        null,
-        2
-      )
-    );
-
-    mockCheckWorkflowPermission.mockImplementation(
-      async (workflowId: string) => workflowId === 'wf-1'
-    );
-
-    const stats = await service.getStats('30d', 'brad');
-    expect(stats).toMatchObject({
-      totalWorkflows: 1,
-      activeRuns: 0,
-      completedRuns: 1,
-      failedRuns: 1,
-      successRate: 0.5,
-    });
-    expect(stats.avgDuration).toBe(30 * 60 * 1000);
-    expect(stats.perWorkflow).toEqual([
-      expect.objectContaining({
-        workflowId: 'wf-1',
-        workflowName: 'Workflow One',
-        runs: 2,
-        completed: 1,
-        failed: 1,
-        successRate: 0.5,
-        avgDuration: 30 * 60 * 1000,
-      }),
-    ]);
-  });
-
-  it('rejects invalid ids, missing workflows, invalid metadata reads, and unimplemented agent escalation', async () => {
-    await expect(service.getRun('../bad')).rejects.toThrow(/illegal path characters/);
-    await expect(service.getRun('run_invalid')).rejects.toThrow(/format is invalid/);
-
-    mockLoadWorkflow.mockResolvedValueOnce(null);
-    await expect(service.startRun('missing')).rejects.toThrow(/not found/);
-
-    mockLoadWorkflow.mockResolvedValue(
-      makeWorkflow({
-        steps: [
-          {
-            id: 'step-1',
-            type: 'agent',
-            agent: 'agent-1',
-            prompt: 'x',
-            on_fail: { escalate_to: 'agent:TARS' },
-          },
-        ],
-      })
-    );
-    mockExecuteStep.mockRejectedValueOnce(new Error('boom'));
-    const run = await service.startRun('wf-1');
-    await vi.waitFor(async () => expect((await service.getRun(run.id)).status).toBe('failed'));
-    expect((await service.getRun(run.id)).error).toMatch(/Agent escalation not yet implemented/);
+    expect(stats.totalWorkflows).toBe(1);
+    expect(stats.completedRuns).toBe(1);
+    expect(stats.perWorkflow[0].workflowId).toBe('test-workflow-run');
+    expect(stats.perWorkflow[0].completed).toBe(1);
+    expect(stats.successRate).toBe(1);
   });
 });

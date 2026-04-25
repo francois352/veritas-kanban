@@ -61,6 +61,8 @@ const createProfileSchema = z.object({
   description: z.string().optional(),
   scorers: z.array(scorerSchema).min(1),
   compositeMethod: z.enum(['weightedAvg', 'minimum', 'geometricMean']),
+  tags: z.array(z.string()).optional(),
+  domain: z.string().optional(),
 });
 
 const updateProfileSchema = createProfileSchema.partial();
@@ -87,8 +89,12 @@ const parseOrThrow = <T>(schema: z.ZodType<T>, value: unknown): T => {
 
 router.get(
   '/profiles',
-  asyncHandler(async (_req, res) => {
-    const profiles = await scoringService.listProfiles();
+  asyncHandler(async (req, res) => {
+    const domain = qStr(req.query.domain);
+    const tagsStr = qStr(req.query.tags);
+    const tags = tagsStr ? tagsStr.split(',') : undefined;
+
+    const profiles = await scoringService.listProfiles({ domain, tags });
     res.json(profiles);
   })
 );

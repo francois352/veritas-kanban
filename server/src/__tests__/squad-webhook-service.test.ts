@@ -1,171 +1,170 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi, beforeEach, afterEach } from 'vitest';
+import { fireSquadWebhook } from '../services/squad-webhook-service.js';
+import type { SquadMessage, SquadWebhookSettings } from '@veritas-kanban/shared';
 import crypto from 'crypto';
 
-const mockValidateWebhookUrl = vi.fn();
-
-vi.mock('../utils/url-validation.js', () => ({
-  validateWebhookUrl: mockValidateWebhookUrl,
-}));
-
-describe('squad webhook service', () => {
-  let fetchSpy: any;
+describe('SquadWebhookService', () => {
+  let fetchMock: any;
 
   beforeEach(() => {
-    vi.resetModules();
-    mockValidateWebhookUrl.mockReturnValue({ valid: true });
-    fetchSpy = vi.spyOn(globalThis, 'fetch' as any);
+    fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+      statusText: 'OK',
+    });
+    global.fetch = fetchMock;
   });
 
   afterEach(() => {
-    fetchSpy.mockRestore();
-    vi.clearAllMocks();
+    vi.restoreAllMocks();
   });
 
-  it('skips disabled webhooks and notification modes', async () => {
-    const mod = await import('../services/squad-webhook-service.js');
-    const message = {
-      id: 'm1',
-      agent: 'Human',
-      message: 'hi',
-      timestamp: '2026-03-01T00:00:00.000Z',
-    } as any;
+  const baseMessage: SquadMessage = {
+    id: 'msg-1',
+    agent: 'jules',
+    message: 'test message',
+    timestamp: '2023-01-01T00:00:00Z',
+  };
 
-    await mod.fireSquadWebhook(message, { enabled: false } as any);
-    await mod.fireSquadWebhook(message, {
-      enabled: true,
-      notifyOnHuman: false,
-      notifyOnAgent: true,
-      mode: 'generic',
-      url: 'https://x.test',
-    } as any);
-    await mod.fireSquadWebhook({ ...message, agent: 'TARS' }, {
-      enabled: true,
-      notifyOnHuman: true,
-      notifyOnAgent: false,
-      mode: 'generic',
-      url: 'https://x.test',
-    } as any);
+  const baseSettings: SquadWebhookSettings = {
+    enabled: true,
+    mode: 'generic',
+    notifyOnHuman: true,
+    notifyOnAgent: true,
+    url: 'https://example.com/webhook',
+  };
 
-    expect(fetchSpy).not.toHaveBeenCalled();
+  it('does not fire if not enabled', async () => {
+    await fireSquadWebhook(baseMessage, { ...baseSettings, enabled: false });
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('fires generic webhook with signed payload', async () => {
-    fetchSpy.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
-    const mod = await import('../services/squad-webhook-service.js');
-    const message = {
-      id: 'm1',
-      agent: 'TARS',
-      displayName: 'Tars',
-      message: 'working',
-      tags: ['testing'],
-      timestamp: '2026-03-01T00:00:00.000Z',
-      card: { title: 'Card' },
-    } as any;
+  it('does not fire if notifyOnHuman is false for human message', async () => {
+    await fireSquadWebhook(
+      { ...baseMessage, agent: 'Human' },
+      { ...baseSettings, notifyOnHuman: false }
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 
-    await mod.fireSquadWebhook(message, {
-      enabled: true,
-      notifyOnHuman: true,
-      notifyOnAgent: true,
-      mode: 'generic',
-      url: 'https://example.test/hook',
-      secret: 'shhh',
-    } as any);
+  it('does not fire if notifyOnAgent is false for agent message', async () => {
+    await fireSquadWebhook(
+      { ...baseMessage, agent: 'jules' },
+      { ...baseSettings, notifyOnAgent: false }
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
 
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchSpy.mock.calls[0];
-    expect(url).toBe('https://example.test/hook');
-    const body = init.body as string;
-    const expectedSig = crypto.createHmac('sha256', 'shhh').update(body).digest('hex');
-    expect(init.headers['X-VK-Signature']).toBe(`sha256=${expectedSig}`);
-    expect(JSON.parse(body)).toMatchObject({
+  it('fires generic webhook with correct payload', async () => {
+    await fireSquadWebhook(baseMessage, baseSettings);
+
+    // Wait a tick for the async fetch to happen
+    await new Promise(process.nextTick);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('https://example.com/webhook', expect.objectContaining({
+      method: 'POST',
+      headers: expect.objectContaining({
+        'Content-Type': 'application/json',
+      }),
+      body: expect.any(String),
+    }));
+
+    const callArgs = fetchMock.mock.calls[0];
+    const body = JSON.parse(callArgs[1].body);
+
+    expect(body).toEqual({
       event: 'squad.message',
+      message: {
+        id: 'msg-1',
+        agent: 'jules',
+        message: 'test message',
+        timestamp: '2023-01-01T00:00:00Z',
+      },
       isHuman: false,
-      message: { id: 'm1', card: { title: 'Card' } },
     });
   });
 
-  it('fires OpenClaw wake call and validates url', async () => {
-    fetchSpy.mockResolvedValue({ ok: true, status: 200, statusText: 'OK' });
-    const mod = await import('../services/squad-webhook-service.js');
+  it('includes HMAC signature if secret is provided', async () => {
+    const secret = 'supersecret';
+    await fireSquadWebhook(baseMessage, { ...baseSettings, secret });
 
-    await mod.fireSquadWebhook(
-      {
-        id: 'm1',
-        agent: 'TARS',
-        displayName: 'TARS',
-        message: 'hello',
-        timestamp: '2026-03-01T00:00:00.000Z',
-      } as any,
+    await new Promise(process.nextTick);
+
+    const callArgs = fetchMock.mock.calls[0];
+    const headers = callArgs[1].headers;
+    const bodyStr = callArgs[1].body;
+
+    const expectedSignature = crypto.createHmac('sha256', secret).update(bodyStr).digest('hex');
+
+    expect(headers['X-VK-Signature']).toBe(`sha256=${expectedSignature}`);
+  });
+
+  it('fires OpenClaw wake call with correct payload', async () => {
+    await fireSquadWebhook(
+      { ...baseMessage, displayName: 'Jules AI' },
       {
         enabled: true,
+        mode: 'openclaw',
         notifyOnHuman: true,
         notifyOnAgent: true,
-        mode: 'openclaw',
-        openclawGatewayUrl: 'https://gateway.test',
-        openclawGatewayToken: 'token',
-      } as any
+        openclawGatewayUrl: 'https://gateway.example.com',
+        openclawGatewayToken: 'token123',
+      }
     );
 
-    expect(mockValidateWebhookUrl).toHaveBeenCalledWith('https://gateway.test/tools/invoke');
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
-    expect(fetchSpy.mock.calls[0][0]).toBe('https://gateway.test/tools/invoke');
-    expect(JSON.parse(fetchSpy.mock.calls[0][1].body)).toMatchObject({
+    await new Promise(process.nextTick);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://gateway.example.com/tools/invoke',
+      expect.objectContaining({
+        method: 'POST',
+        headers: expect.objectContaining({
+          'Content-Type': 'application/json',
+          Authorization: 'Bearer token123',
+        }),
+      })
+    );
+
+    const callArgs = fetchMock.mock.calls[0];
+    const body = JSON.parse(callArgs[1].body);
+
+    expect(body).toEqual({
       tool: 'cron',
-      args: { action: 'wake', mode: 'now' },
+      args: {
+        action: 'wake',
+        text: '🗨️ Squad chat from Jules AI: test message',
+        mode: 'now',
+      },
     });
   });
 
-  it('skips invalid OpenClaw or incomplete config and tolerates failed responses', async () => {
-    const mod = await import('../services/squad-webhook-service.js');
-    const msg = {
-      id: 'm1',
-      agent: 'TARS',
-      message: 'hello',
-      timestamp: '2026-03-01T00:00:00.000Z',
-    } as any;
-
-    await mod.fireSquadWebhook(msg, {
+  it('validates OpenClaw gateway URL to prevent SSRF', async () => {
+    await fireSquadWebhook(baseMessage, {
       enabled: true,
-      notifyOnHuman: true,
-      notifyOnAgent: true,
       mode: 'openclaw',
-    } as any);
-    mockValidateWebhookUrl.mockReturnValue({ valid: false, reason: 'ssrf' });
-    await mod.fireSquadWebhook(msg, {
-      enabled: true,
       notifyOnHuman: true,
       notifyOnAgent: true,
-      mode: 'openclaw',
-      openclawGatewayUrl: 'https://bad.test',
-      openclawGatewayToken: 'token',
-    } as any);
-    expect(fetchSpy).not.toHaveBeenCalled();
+      openclawGatewayUrl: 'http://localhost:8080',
+      openclawGatewayToken: 'token123',
+    });
 
-    fetchSpy.mockResolvedValue({ ok: false, status: 500, statusText: 'bad' });
-    await mod.fireSquadWebhook(msg, {
-      enabled: true,
-      notifyOnHuman: true,
-      notifyOnAgent: true,
-      mode: 'generic',
-      url: 'https://example.test/hook',
-    } as any);
-    expect(fetchSpy).toHaveBeenCalledTimes(1);
+    await new Promise(process.nextTick);
+
+    // URL validation should fail, so fetch should not be called
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
-  it('swallows async generic webhook failures but propagates timeout helper behavior through logging path', async () => {
-    fetchSpy.mockRejectedValue(new Error('network down'));
-    const mod = await import('../services/squad-webhook-service.js');
-    await expect(
-      mod.fireSquadWebhook(
-        { id: 'm1', agent: 'TARS', message: 'hello', timestamp: '2026-03-01T00:00:00.000Z' } as any,
-        {
-          enabled: true,
-          notifyOnHuman: true,
-          notifyOnAgent: true,
-          mode: 'generic',
-          url: 'https://example.test/hook',
-        } as any
-      )
-    ).resolves.toBeUndefined();
+  it('handles fetch failures gracefully without throwing', async () => {
+    fetchMock.mockRejectedValue(new Error('Network error'));
+
+    // Should not throw
+    await fireSquadWebhook(baseMessage, baseSettings);
+
+    await new Promise(process.nextTick);
+
+    // Webhook doesn't retry internally, it just fire-and-forgets
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
