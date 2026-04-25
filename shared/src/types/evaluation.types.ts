@@ -59,8 +59,6 @@ export interface ScoringProfile {
   builtIn?: boolean;
   created: string;
   updated: string;
-  tags?: string[];
-  domain?: string;
 }
 
 export interface CreateScoringProfileInput {
@@ -68,8 +66,6 @@ export interface CreateScoringProfileInput {
   description?: string;
   scorers: Scorer[];
   compositeMethod: ScoringCompositeMethod;
-  tags?: string[];
-  domain?: string;
 }
 
 export interface UpdateScoringProfileInput {
@@ -77,8 +73,6 @@ export interface UpdateScoringProfileInput {
   description?: string;
   scorers?: Scorer[];
   compositeMethod?: ScoringCompositeMethod;
-  tags?: string[];
-  domain?: string;
 }
 
 export interface EvaluationRequest {
@@ -112,7 +106,6 @@ export interface EvaluationResult {
   scores: EvaluationDimensionScore[];
   compositeScore: number;
   created: string;
-  warning?: string;
 }
 
 export interface EvaluationHistoryQuery {

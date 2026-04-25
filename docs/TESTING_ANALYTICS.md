@@ -107,8 +107,9 @@ curl -s http://localhost:3001/api/analytics/timeline | jq .
 ### Test 2: Get Timeline with Date Range
 
 ```bash
-# Get timeline for today
-curl -s "http://localhost:3001/api/analytics/timeline?from=2026-02-04T00:00:00Z&to=2026-02-05T23:59:59Z" | jq .
+# Get timeline for today (substitute current date)
+TODAY=$(date -u +%Y-%m-%d)
+curl -s "http://localhost:3001/api/analytics/timeline?from=${TODAY}T00:00:00Z&to=${TODAY}T23:59:59Z" | jq .
 ```
 
 **Expected Output:**
@@ -149,26 +150,11 @@ curl -s http://localhost:3001/api/analytics/timeline | \
 **Expected Output Pattern:**
 
 ```json
-{
-  "timestamp": "2026-02-05T10:00:00Z",
-  "count": 1
-}
-{
-  "timestamp": "2026-02-05T10:15:00Z",
-  "count": 2
-}
-{
-  "timestamp": "2026-02-05T10:45:00Z",
-  "count": 3
-}
-{
-  "timestamp": "2026-02-05T11:00:00Z",
-  "count": 2
-}
-{
-  "timestamp": "2026-02-05T11:30:00Z",
-  "count": 1
-}
+{"timestamp": "..T10:00:00Z", "count": 1}
+{"timestamp": "..T10:15:00Z", "count": 2}
+{"timestamp": "..T10:45:00Z", "count": 3}
+{"timestamp": "..T11:00:00Z", "count": 2}
+{"timestamp": "..T11:30:00Z", "count": 1}
 ```
 
 ### Test 6: Agent Utilization
@@ -273,7 +259,7 @@ Example error response:
   "success": false,
   "error": "Validation failed",
   "meta": {
-    "timestamp": "2026-02-05T02:50:00Z",
+    "timestamp": "...",
     "requestId": "..."
   }
 }

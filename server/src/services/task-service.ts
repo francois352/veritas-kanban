@@ -1,5 +1,5 @@
 import fs from 'fs/promises';
-import { watch, type FSWatcher } from '../storage/fs-helpers.js';
+import { watch, batchedMap, type FSWatcher } from '../storage/fs-helpers.js';
 import path from 'path';
 import matter from 'gray-matter';
 import { nanoid } from 'nanoid';
@@ -130,16 +130,20 @@ export class TaskService {
     const mdFiles = files.filter((f) => f.endsWith('.md'));
 
     this.cache.clear();
-    await Promise.all(
-      mdFiles.map(async (filename) => {
-        const filepath = path.join(this.tasksDir, filename);
-        const content = await fs.readFile(filepath, 'utf-8');
-        const task = this.parseTaskFile(content, filename);
-        if (task) {
-          this.cache.set(task.id, task);
-        }
-      })
-    );
+
+    // Bounded-concurrency batch read — 10 files at a time.
+    // Individual read failures produce null (logged but don't abort the load).
+    const tasks = await batchedMap(mdFiles, async (filename) => {
+      const filepath = path.join(this.tasksDir, filename);
+      const content = await fs.readFile(filepath, 'utf-8');
+      return this.parseTaskFile(content, filename);
+    });
+
+    for (const task of tasks) {
+      if (task) {
+        this.cache.set(task.id, task);
+      }
+    }
   }
 
   /**
@@ -402,18 +406,50 @@ export class TaskService {
     return content;
   }
 
+  private parseReviewCommentsSection(
+    description: string,
+    fallbackCreated: string
+  ): { cleanDescription: string; reviewComments: ReviewComment[]; hasReviewSection: boolean } {
+    const reviewSection = description.indexOf('## Review Comments');
+    if (reviewSection === -1) {
+      return { cleanDescription: description.trim(), reviewComments: [], hasReviewSection: false };
+    }
+
+    const cleanDescription = description.slice(0, reviewSection).trim();
+    const reviewBody = description.slice(reviewSection + '## Review Comments'.length).trim();
+
+    const reviewComments = reviewBody
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => line.length > 0)
+      .map((line, index) => {
+        const match = line.match(/^- \*\*(.+):(\d+)\*\* - (.*)$/);
+        if (!match) return null;
+        const [, file, lineNumber, comment] = match;
+        return {
+          id: `comment-${index}`,
+          file,
+          line: Number.parseInt(lineNumber, 10),
+          content: comment,
+          created: fallbackCreated,
+        } as ReviewComment;
+      })
+      .filter((c): c is ReviewComment => c !== null);
+
+    return { cleanDescription, reviewComments, hasReviewSection: true };
+  }
+
   private parseTaskFile(content: string, filename: string): Task | null {
     try {
       const { data, content: description } = matter(content);
 
       // Extract review comments from description if present
-      let cleanDescription = description;
-      const reviewComments: Task['reviewComments'] = [];
-
-      const reviewSection = description.indexOf('## Review Comments');
-      if (reviewSection !== -1) {
-        cleanDescription = description.slice(0, reviewSection).trim();
-      }
+      const frontmatterReviewComments = Array.isArray(data.reviewComments)
+        ? (data.reviewComments as ReviewComment[])
+        : [];
+      const fallbackCreated = data.updated || data.created || new Date().toISOString();
+      const { cleanDescription, reviewComments, hasReviewSection } =
+        this.parseReviewCommentsSection(description, fallbackCreated);
 
       // Validate required fields
       const id = data.id || filename.split('-')[0];
@@ -438,7 +474,7 @@ export class TaskService {
         github: data.github,
         attempt: data.attempt,
         attempts: data.attempts,
-        reviewComments,
+        reviewComments: hasReviewSection ? reviewComments : frontmatterReviewComments,
         reviewScores: data.reviewScores,
         review: data.review,
         subtasks: data.subtasks,
@@ -1023,16 +1059,17 @@ export class TaskService {
     const files = await fs.readdir(this.archiveDir);
     const mdFiles = files.filter((f) => f.endsWith('.md'));
 
-    const results = await Promise.all(
-      mdFiles.map(async (filename) => {
-        const filepath = path.join(this.archiveDir, filename);
-        const content = await fs.readFile(filepath, 'utf-8');
-        return this.parseTaskFile(content, filename);
-      })
-    );
+    // Bounded-concurrency batch read — 10 files at a time.
+    // Individual read/parse failures produce null and are filtered out;
+    // one bad archive file never aborts the entire listing.
+    const results = await batchedMap(mdFiles, async (filename) => {
+      const filepath = path.join(this.archiveDir, filename);
+      const content = await fs.readFile(filepath, 'utf-8');
+      return this.parseTaskFile(content, filename);
+    });
 
-    // Filter out null values from failed parses
-    const tasks = results.filter((t: Task | null): t is Task => t !== null);
+    // Filter out nulls (failed reads or invalid task files)
+    const tasks = results.filter((t): t is Task => t !== null);
 
     // Sort by updated date, newest first
     return tasks.sort(
