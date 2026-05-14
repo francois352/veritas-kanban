@@ -15,7 +15,12 @@
  *   Global apiRateLimit (300 req/min, localhost exempt) is applied upstream in index.ts.
  */
 import { Router, type IRouter, type Request } from 'express';
-import { readRateLimit, writeRateLimit, uploadRateLimit } from '../../middleware/rate-limit.js';
+import {
+  readRateLimit,
+  writeRateLimit,
+  uploadRateLimit,
+  searchRateLimit,
+} from '../../middleware/rate-limit.js';
 
 // Task routes (order-sensitive — see note above)
 import { taskArchiveRoutes } from '../task-archive.js';
@@ -92,6 +97,10 @@ function isSearchQueryPath(pathname: string): boolean {
 
 function isReadRateLimitedRequest(req: Request): boolean {
   if (req.method === 'GET' || req.method === 'HEAD') return true;
+  return false;
+}
+
+function isSearchRateLimitedRequest(req: Request): boolean {
   if (req.method !== 'POST') return false;
 
   const pathname = (req.originalUrl || req.url || req.path).split('?')[0] ?? '';
@@ -100,10 +109,13 @@ function isReadRateLimitedRequest(req: Request): boolean {
 
 // ── Tiered rate limiting by HTTP method ──────────────────────
 // GET → readRateLimit (300 req/min)
+// POST /search → searchRateLimit (60 req/min)
 // POST/PUT/PATCH/DELETE → writeRateLimit (60 req/min)
-// Read-only POST endpoints such as /search also use readRateLimit.
 // The global apiRateLimit (applied upstream) acts as an outer cap.
 v1Router.use((req: Request, _res, next) => {
+  if (isSearchRateLimitedRequest(req)) {
+    return searchRateLimit(req, _res, next);
+  }
   if (isReadRateLimitedRequest(req)) {
     return readRateLimit(req, _res, next);
   }

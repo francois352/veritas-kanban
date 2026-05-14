@@ -259,18 +259,21 @@ class SearchService {
 
     return rawResults.slice(0, limit).map((raw, index) => {
       const item = raw as Record<string, unknown>;
-      const filePath = this.firstString(item.path, item.file, item.filename, item.id) ?? '';
-      const title =
-        (this.firstString(item.title, item.name) ?? path.basename(filePath)) || 'Result';
+      const rawFilePath = this.firstString(item.path, item.file, item.filename, item.id) ?? '';
       const snippet =
         this.firstString(item.snippet, item.context, item.text, item.content, item.body) ?? '';
       const collection =
-        this.firstString(item.collection, item.source) ?? this.inferCollection(filePath);
+        this.firstString(item.collection, item.source) ?? this.inferCollection(rawFilePath);
       const score =
         this.firstNumber(item.score, item.relevance, item.rankScore) ?? 1 - index / limit;
+      const filePath = this.normalizeResultPath(rawFilePath, collection);
+      const title =
+        (this.firstString(item.title, item.name) ??
+          (filePath === 'unknown' ? 'Result' : path.basename(filePath))) ||
+        'Result';
 
       return {
-        id: this.firstString(item.id, item.docid, item.docId) ?? `${filePath || 'result'}:${index}`,
+        id: filePath === 'unknown' ? `${collection}:result:${index}` : `${collection}:${filePath}`,
         title,
         path: filePath,
         collection,
@@ -290,6 +293,76 @@ class SearchService {
       }
     }
     return [];
+  }
+
+  private normalizeResultPath(rawPath: string, collection: string): string {
+    const cleaned = rawPath.trim();
+    if (!cleaned) return 'unknown';
+
+    const sources = this.sources(DEFAULT_COLLECTIONS);
+    const absolutePath = this.absolutePathFromRaw(cleaned);
+    if (absolutePath) {
+      const matched = this.relativePathFromSources(absolutePath, sources);
+      if (matched) return matched;
+      return 'unknown';
+    }
+
+    const normalized = cleaned.replace(/\\/g, '/').replace(/^\.?\//, '');
+    if (!this.isSafeRelativePath(normalized)) {
+      return this.safeBasenamePath(cleaned, collection);
+    }
+
+    const collectionPrefix = this.collectionPath(collection);
+    if (!collectionPrefix) return normalized;
+    if (normalized === collectionPrefix || normalized.startsWith(`${collectionPrefix}/`)) {
+      return normalized;
+    }
+    return path.posix.join(collectionPrefix, normalized);
+  }
+
+  private absolutePathFromRaw(rawPath: string): string | null {
+    if (path.isAbsolute(rawPath)) return path.resolve(rawPath);
+    if (path.win32.isAbsolute(rawPath)) return rawPath;
+    return null;
+  }
+
+  private relativePathFromSources(absolutePath: string, sources: SearchSource[]): string | null {
+    const normalizedAbsolute = absolutePath.replace(/\\/g, '/');
+
+    for (const source of sources) {
+      const sourceDir = source.dir.replace(/\\/g, '/');
+      const relative = path.posix.relative(sourceDir, normalizedAbsolute);
+      if (!relative || relative.startsWith('..') || path.posix.isAbsolute(relative)) continue;
+
+      const collectionPrefix = this.collectionPath(source.collection);
+      return collectionPrefix ? path.posix.join(collectionPrefix, relative) : relative;
+    }
+
+    return null;
+  }
+
+  private safeBasenamePath(rawPath: string, collection: string): string {
+    const basename = path.basename(rawPath.replace(/\\/g, '/'));
+    if (!basename || basename === '.' || basename === '..') return 'unknown';
+
+    const collectionPrefix = this.collectionPath(collection);
+    return collectionPrefix ? path.posix.join(collectionPrefix, basename) : basename;
+  }
+
+  private isSafeRelativePath(value: string): boolean {
+    return (
+      value.length > 0 &&
+      !value.startsWith('/') &&
+      !path.win32.isAbsolute(value) &&
+      !value.split('/').includes('..')
+    );
+  }
+
+  private collectionPath(collection: string): string | null {
+    if (collection === 'tasks-active') return 'tasks/active';
+    if (collection === 'tasks-archive') return 'tasks/archive';
+    if (collection === 'docs') return 'docs';
+    return null;
   }
 
   private async searchKeyword(

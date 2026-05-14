@@ -116,7 +116,7 @@ describe('SearchService', () => {
         JSON.stringify({
           results: [
             {
-              path: 'tasks/active/task_1.md',
+              path: path.join(root, 'tasks', 'active', 'task_1.md'),
               title: 'Semantic search',
               snippet: 'QMD result',
               content: 'Private full document body should not be exposed.',
@@ -135,6 +135,8 @@ describe('SearchService', () => {
     expect(result.degraded).toBe(false);
     expect(result.results[0]).toMatchObject({
       title: 'Semantic search',
+      path: 'tasks/active/task_1.md',
+      id: 'tasks-active:tasks/active/task_1.md',
       score: 0.92,
       collection: 'tasks-active',
     });
@@ -154,6 +156,34 @@ describe('SearchService', () => {
       expect.objectContaining({ timeout: 10_000 }),
       expect.any(Function)
     );
+  });
+
+  it('redacts qmd result paths outside configured sources', async () => {
+    process.env.VERITAS_SEARCH_BACKEND = 'qmd';
+    execFileMock.mockImplementation((_bin, _args, _options, callback) => {
+      callback(
+        null,
+        JSON.stringify({
+          results: [
+            {
+              path: '/srv/private/outside/task_secret.md',
+              title: 'Outside task',
+              snippet: 'outside',
+              collection: 'tasks-active',
+            },
+          ],
+        }),
+        ''
+      );
+    });
+
+    const result = await new SearchService().search({ query: 'outside' });
+
+    expect(result.results[0]).toMatchObject({
+      id: 'tasks-active:result:0',
+      path: 'unknown',
+    });
+    expect(result.results[0].path).not.toContain('/srv/private');
   });
 
   it('places flag-like qmd queries after an option separator', async () => {

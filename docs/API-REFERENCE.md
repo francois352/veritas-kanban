@@ -1494,7 +1494,7 @@ POST /api/search
 }
 ```
 
-`backend` may be `keyword`, `qmd`, or `auto`. QMD is opt-in via `VERITAS_SEARCH_BACKEND=qmd` or per-request `backend: "qmd"`. Read-only API keys are served with the keyword backend even if they request `auto` or `qmd`.
+`backend` may be `keyword`, `qmd`, or `auto`. QMD is opt-in via `VERITAS_SEARCH_BACKEND=qmd` or per-request `backend: "qmd"`. Read-only API keys are served with the keyword backend even if they request `auto` or `qmd`. Search requests use a dedicated rate limit because they can scan files or call QMD.
 
 **Response** `200`:
 
@@ -1517,7 +1517,7 @@ POST /api/search
 }
 ```
 
-Raw QMD result metadata is not included in the public response.
+Raw QMD result metadata and absolute source paths are not included in the public response.
 
 ### QMD Setup
 
