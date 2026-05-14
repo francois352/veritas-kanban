@@ -45,6 +45,7 @@ import {
   checkAdminKeyStrength,
   type AuthenticatedWebSocket,
 } from './middleware/auth.js';
+import { verifyKanbanSignature } from './middleware/kanban-signature.js';
 import authRoutes from './routes/auth.js';
 import { checkJwtSecretConfig } from './config/security.js';
 import swaggerUi from 'swagger-ui-express';
@@ -450,6 +451,7 @@ app.use('/api', authenticate);
 // Read-only roles can perform only GET/HEAD/OPTIONS on API routes.
 // ============================================
 app.use('/api', authorizeWrite);
+app.use('/api', verifyKanbanSignature);
 
 // ============================================
 // API Versioning Middleware
