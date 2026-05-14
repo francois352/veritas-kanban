@@ -156,6 +156,37 @@ describe('CreateTaskDialog duplicate detection', () => {
       elapsedMs: 3,
       results: [
         {
+          id: 'tasks/active/task_20260504_match-search-duplicate.md',
+          title: 'Active Search Duplicate',
+          path: 'tasks/active/task_20260504_match-search-duplicate.md',
+          collection: 'tasks-active',
+          snippet: '',
+          score: 4,
+        },
+      ],
+    });
+
+    const onOpenChange = vi.fn();
+    render(<CreateTaskDialog open onOpenChange={onOpenChange} />);
+
+    fireEvent.change(screen.getByLabelText('Title'), {
+      target: { value: 'Search duplicate' },
+    });
+
+    fireEvent.click(await screen.findByText('Active Search Duplicate'));
+
+    expect(navigateToTaskMock).toHaveBeenCalledWith('task_20260504_match');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('shows archived duplicate results without opening them on the active board', async () => {
+    queryMock.mockResolvedValue({
+      query: 'Search duplicate',
+      backend: 'keyword',
+      degraded: false,
+      elapsedMs: 3,
+      results: [
+        {
           id: 'tasks/archive/task_20260504_match-search-duplicate.md',
           title: 'Archived Search Duplicate',
           path: 'tasks/archive/task_20260504_match-search-duplicate.md',
@@ -175,7 +206,7 @@ describe('CreateTaskDialog duplicate detection', () => {
 
     fireEvent.click(await screen.findByText('Archived Search Duplicate'));
 
-    expect(navigateToTaskMock).toHaveBeenCalledWith('task_20260504_match');
-    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(navigateToTaskMock).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
   });
 });

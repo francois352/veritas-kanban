@@ -101,4 +101,34 @@ describe('SearchDialog', () => {
     expect(onTaskOpen).toHaveBeenCalledWith('task_20260504_abc123');
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
+
+  it('shows archived task results without opening them on the active board', async () => {
+    const onTaskOpen = vi.fn();
+    const onOpenChange = vi.fn();
+    queryMock.mockResolvedValue({
+      query: 'task',
+      backend: 'keyword',
+      degraded: false,
+      elapsedMs: 2,
+      results: [
+        {
+          id: 'tasks/archive/task_20260504_archive-build-search.md',
+          title: 'Archived search work',
+          path: 'tasks/archive/task_20260504_archive-build-search.md',
+          collection: 'tasks-archive',
+          snippet: '',
+          score: 2,
+        },
+      ],
+    });
+
+    render(<SearchDialog open onOpenChange={onOpenChange} onTaskOpen={onTaskOpen} />);
+
+    await userEvent.type(screen.getByPlaceholderText(/search task titles/i), 'task');
+    fireEvent.click(screen.getByRole('button', { name: /^search$/i }));
+    fireEvent.click(await screen.findByText('Archived search work'));
+
+    expect(onTaskOpen).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+  });
 });

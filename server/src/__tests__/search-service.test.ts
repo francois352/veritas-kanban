@@ -190,20 +190,85 @@ describe('SearchService', () => {
       backend: 'qmd',
       updated: true,
       embedded: true,
-      commands: ['update', 'embed'],
+      commands: [
+        'collection remove tasks-active',
+        'collection add tasks-active',
+        'collection remove tasks-archive',
+        'collection add tasks-archive',
+        'collection remove docs',
+        'collection add docs',
+        'update',
+        'embed',
+      ],
     });
     expect(execFileMock).toHaveBeenNthCalledWith(
       1,
       'qmd',
-      ['update'],
+      ['collection', 'remove', 'tasks-active'],
       expect.objectContaining({ cwd: root, timeout: 60_000 }),
       expect.any(Function)
     );
     expect(execFileMock).toHaveBeenNthCalledWith(
       2,
       'qmd',
+      ['collection', 'add', path.join(root, 'tasks', 'active'), '--name', 'tasks-active'],
+      expect.objectContaining({ cwd: root, timeout: 60_000 }),
+      expect.any(Function)
+    );
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      4,
+      'qmd',
+      ['collection', 'add', path.join(root, 'tasks', 'archive'), '--name', 'tasks-archive'],
+      expect.objectContaining({ cwd: root, timeout: 60_000 }),
+      expect.any(Function)
+    );
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      6,
+      'qmd',
+      ['collection', 'add', path.join(root, 'docs'), '--name', 'docs'],
+      expect.objectContaining({ cwd: root, timeout: 60_000 }),
+      expect.any(Function)
+    );
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      7,
+      'qmd',
+      ['update'],
+      expect.objectContaining({ cwd: root, timeout: 60_000 }),
+      expect.any(Function)
+    );
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      8,
+      'qmd',
       ['embed'],
       expect.objectContaining({ cwd: root, timeout: 60_000 }),
+      expect.any(Function)
+    );
+  });
+
+  it('refreshes qmd task collections from DATA_DIR when search root is not overridden', async () => {
+    delete process.env.VERITAS_SEARCH_ROOT;
+    const dataRoot = path.join(root, 'data-root');
+    await fs.mkdir(path.join(dataRoot, 'tasks', 'active'), { recursive: true });
+    await fs.mkdir(path.join(dataRoot, 'tasks', 'archive'), { recursive: true });
+    process.env.DATA_DIR = dataRoot;
+    execFileMock.mockImplementation((_bin, _args, _options, callback) => {
+      callback(null, '', '');
+    });
+
+    await new SearchService().refreshIndex({ embed: false });
+
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      2,
+      'qmd',
+      ['collection', 'add', path.join(dataRoot, 'tasks', 'active'), '--name', 'tasks-active'],
+      expect.objectContaining({ timeout: 60_000 }),
+      expect.any(Function)
+    );
+    expect(execFileMock).toHaveBeenNthCalledWith(
+      4,
+      'qmd',
+      ['collection', 'add', path.join(dataRoot, 'tasks', 'archive'), '--name', 'tasks-archive'],
+      expect.objectContaining({ timeout: 60_000 }),
       expect.any(Function)
     );
   });
@@ -226,7 +291,7 @@ describe('SearchService', () => {
 
     execFileMock.mockClear();
     await new SearchService().refreshIndex({ embed: false });
-    expect(execFileMock).toHaveBeenCalledWith(
+    expect(execFileMock).toHaveBeenLastCalledWith(
       'qmd',
       ['update'],
       expect.objectContaining({ timeout: 60_000 }),
@@ -242,7 +307,15 @@ describe('SearchService', () => {
     const result = await new SearchService().refreshIndex({ embed: false });
 
     expect(result.embedded).toBe(false);
-    expect(result.commands).toEqual(['update']);
-    expect(execFileMock).toHaveBeenCalledTimes(1);
+    expect(result.commands).toEqual([
+      'collection remove tasks-active',
+      'collection add tasks-active',
+      'collection remove tasks-archive',
+      'collection add tasks-archive',
+      'collection remove docs',
+      'collection add docs',
+      'update',
+    ]);
+    expect(execFileMock).toHaveBeenCalledTimes(7);
   });
 });

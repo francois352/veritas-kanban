@@ -191,24 +191,10 @@ export function SearchDialog({ open, onOpenChange, onTaskOpen }: SearchDialogPro
             ) : (
               response?.results.map((result) => {
                 const Icon = collectionIcon(result.collection);
-                const taskId = result.collection.startsWith('tasks')
-                  ? extractTaskId(result.path)
-                  : null;
-
-                return (
-                  <button
-                    key={`${result.collection}:${result.id}`}
-                    type="button"
-                    className={cn(
-                      'flex w-full gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0',
-                      taskId ? 'hover:bg-muted/60' : 'cursor-default'
-                    )}
-                    onClick={() => {
-                      if (!taskId) return;
-                      onTaskOpen?.(taskId);
-                      onOpenChange(false);
-                    }}
-                  >
+                const taskId =
+                  result.collection === 'tasks-active' ? extractTaskId(result.path) : null;
+                const content = (
+                  <>
                     <Icon className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <span className="min-w-0 flex-1">
                       <span className="flex flex-wrap items-center gap-2">
@@ -227,7 +213,31 @@ export function SearchDialog({ open, onOpenChange, onTaskOpen }: SearchDialogPro
                     <span className="text-xs tabular-nums text-muted-foreground">
                       {Number(result.score).toFixed(2)}
                     </span>
+                  </>
+                );
+
+                return taskId ? (
+                  <button
+                    key={`${result.collection}:${result.id}`}
+                    type="button"
+                    className="flex w-full gap-3 border-b px-4 py-3 text-left transition-colors last:border-b-0 hover:bg-muted/60"
+                    onClick={() => {
+                      onTaskOpen?.(taskId);
+                      onOpenChange(false);
+                    }}
+                  >
+                    {content}
                   </button>
+                ) : (
+                  <div
+                    key={`${result.collection}:${result.id}`}
+                    className={cn(
+                      'flex w-full gap-3 border-b px-4 py-3 text-left last:border-b-0',
+                      result.collection === 'tasks-archive' && 'bg-muted/20'
+                    )}
+                  >
+                    {content}
+                  </div>
                 );
               })
             )}

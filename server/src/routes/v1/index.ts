@@ -84,13 +84,23 @@ import { feedbackRoutes } from '../feedback.js';
 import promptRegistryRoutes from '../prompt-registry.js';
 
 const v1Router: IRouter = Router();
+const READ_RATE_POST_ROUTES = new Set(['/search', '/api/search', '/api/v1/search']);
+
+function isReadRateLimitedRequest(req: Request): boolean {
+  if (req.method === 'GET' || req.method === 'HEAD') return true;
+  if (req.method !== 'POST') return false;
+
+  const pathname = (req.originalUrl || req.url || req.path).split('?')[0]?.replace(/\/+$/, '');
+  return READ_RATE_POST_ROUTES.has(pathname || '/');
+}
 
 // ── Tiered rate limiting by HTTP method ──────────────────────
 // GET → readRateLimit (300 req/min)
 // POST/PUT/PATCH/DELETE → writeRateLimit (60 req/min)
+// Read-only POST endpoints such as /search also use readRateLimit.
 // The global apiRateLimit (applied upstream) acts as an outer cap.
 v1Router.use((req: Request, _res, next) => {
-  if (req.method === 'GET' || req.method === 'HEAD') {
+  if (isReadRateLimitedRequest(req)) {
     return readRateLimit(req, _res, next);
   }
   return writeRateLimit(req, _res, next);

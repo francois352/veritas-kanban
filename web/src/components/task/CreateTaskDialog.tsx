@@ -354,18 +354,12 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                     {duplicateResults.length > 0 ? (
                       <div className="mt-2 space-y-2">
                         {duplicateResults.map((result) => {
-                          const taskId = extractTaskId(result.path);
-                          return (
-                            <button
-                              key={`${result.collection}:${result.id}`}
-                              type="button"
-                              className="flex w-full items-start gap-2 rounded-md border bg-background px-3 py-2 text-left transition-colors hover:bg-muted/50"
-                              onClick={() => {
-                                if (!taskId) return;
-                                navigateToTask(taskId);
-                                onOpenChange(false);
-                              }}
-                            >
+                          const taskId =
+                            result.collection === 'tasks-active'
+                              ? extractTaskId(result.path)
+                              : null;
+                          const content = (
+                            <>
                               <span className="min-w-0 flex-1">
                                 <span className="flex flex-wrap items-center gap-2">
                                   <span className="text-sm font-medium">{result.title}</span>
@@ -386,7 +380,28 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                                   aria-hidden="true"
                                 />
                               )}
+                            </>
+                          );
+
+                          return taskId ? (
+                            <button
+                              key={`${result.collection}:${result.id}`}
+                              type="button"
+                              className="flex w-full items-start gap-2 rounded-md border bg-background px-3 py-2 text-left transition-colors hover:bg-muted/50"
+                              onClick={() => {
+                                navigateToTask(taskId);
+                                onOpenChange(false);
+                              }}
+                            >
+                              {content}
                             </button>
+                          ) : (
+                            <div
+                              key={`${result.collection}:${result.id}`}
+                              className="flex w-full items-start gap-2 rounded-md border bg-muted/20 px-3 py-2 text-left"
+                            >
+                              {content}
+                            </div>
                           );
                         })}
                       </div>

@@ -1539,7 +1539,7 @@ POST /api/search/index/refresh
 }
 ```
 
-Set `embed` to `false` to run only `qmd update`.
+Refresh re-registers the configured QMD collections before updating, so `DATA_DIR` task storage is reflected in existing deployments. Set `embed` to `false` to skip `qmd embed`.
 
 **Response** `200`:
 
@@ -1549,7 +1549,16 @@ Set `embed` to `false` to run only `qmd update`.
   "updated": true,
   "embedded": true,
   "elapsedMs": 982,
-  "commands": ["update", "embed"]
+  "commands": [
+    "collection remove tasks-active",
+    "collection add tasks-active",
+    "collection remove tasks-archive",
+    "collection add tasks-archive",
+    "collection remove docs",
+    "collection add docs",
+    "update",
+    "embed"
+  ]
 }
 ```
 

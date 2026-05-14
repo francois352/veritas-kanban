@@ -6,8 +6,8 @@ Veritas Kanban v4.1 adds the first slice of QMD-backed retrieval: a server-side 
 
 The foundation searches these collections:
 
-- `tasks-active` — `tasks/active/**/*.md`
-- `tasks-archive` — `tasks/archive/**/*.md`
+- `tasks-active` — `${DATA_DIR:-repo}/tasks/active/**/*.md`
+- `tasks-archive` — `${DATA_DIR:-repo}/tasks/archive/**/*.md`
 - `docs` — `docs/**/*.{md,mdx,txt}`
 
 Raw telemetry is intentionally excluded.
@@ -47,6 +47,8 @@ Refresh the index after larger task/doc changes:
 pnpm qmd:refresh
 ```
 
+Setup and refresh re-register the collections before updating so Docker deployments that store tasks under `DATA_DIR` do not keep stale project-root task paths.
+
 Set `VERITAS_QMD_SKIP_EMBED=true` to run `qmd update` without `qmd embed`.
 
 ## API
@@ -68,15 +70,15 @@ The response includes `backend`, `degraded`, and optional `reason` fields so cli
 
 Open the search dialog from the header search icon or the command palette action named **Search Tasks and Docs**. The dialog can query active tasks, archived tasks, and docs, and it shows whether the response came from QMD or keyword fallback.
 
-Task results open directly in the board detail panel when the result path maps to a task markdown file.
+Active task results open directly in the board detail panel. Archived task results are shown as historical context and should be opened from the Archive view.
 
 ## Duplicate Detection
 
-The create-task dialog checks active and archived task collections after the title has enough signal. Possible matches are shown inline and can be opened for inspection, but task creation remains available so intentional follow-up work is not blocked.
+The create-task dialog checks active and archived task collections after the title has enough signal. Possible matches are shown inline; active task matches can be opened for inspection, and archived matches are shown as historical context. Task creation remains available so intentional follow-up work is not blocked.
 
 ## Index Maintenance
 
-The admin-only API exposes `POST /api/search/index/refresh` for operators and automation. Send `{ "embed": false }` to update collections without recomputing embeddings.
+The admin-only API exposes `POST /api/search/index/refresh` for operators and automation. Refresh first re-registers the configured collections, then runs `qmd update`. Send `{ "embed": false }` to skip recomputing embeddings.
 
 ## Next v4.1 PRs
 

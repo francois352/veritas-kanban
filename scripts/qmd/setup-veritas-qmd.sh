@@ -14,8 +14,17 @@ if ! command -v "$QMD_BIN" >/dev/null 2>&1; then
 fi
 
 cd "$ROOT_DIR"
-"$QMD_BIN" collection add "$TASKS_ACTIVE_DIR" --name tasks-active
-"$QMD_BIN" collection add "$TASKS_ARCHIVE_DIR" --name tasks-archive
-"$QMD_BIN" collection add "$DOCS_DIR" --name docs
+
+register_collection() {
+  local name="$1"
+  local dir="$2"
+
+  "$QMD_BIN" collection remove "$name" >/dev/null 2>&1 || true
+  "$QMD_BIN" collection add "$dir" --name "$name"
+}
+
+register_collection tasks-active "$TASKS_ACTIVE_DIR"
+register_collection tasks-archive "$TASKS_ARCHIVE_DIR"
+register_collection docs "$DOCS_DIR"
 "$QMD_BIN" update
 "$QMD_BIN" embed

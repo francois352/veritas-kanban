@@ -124,22 +124,18 @@ class SearchService {
   async refreshIndex(options: { embed?: boolean } = {}): Promise<SearchIndexRefreshResponse> {
     const started = Date.now();
     const embed = options.embed ?? true;
-    const commands = ['update'];
-
-    await this.runQmdCommand(
-      ['update'],
-      this.parseTimeout(process.env.VERITAS_QMD_REFRESH_TIMEOUT_MS, DEFAULT_QMD_REFRESH_TIMEOUT_MS)
+    const timeout = this.parseTimeout(
+      process.env.VERITAS_QMD_REFRESH_TIMEOUT_MS,
+      DEFAULT_QMD_REFRESH_TIMEOUT_MS
     );
+    const commands = await this.refreshQmdCollections(timeout);
+
+    commands.push('update');
+    await this.runQmdCommand(['update'], timeout);
 
     if (embed) {
       commands.push('embed');
-      await this.runQmdCommand(
-        ['embed'],
-        this.parseTimeout(
-          process.env.VERITAS_QMD_REFRESH_TIMEOUT_MS,
-          DEFAULT_QMD_REFRESH_TIMEOUT_MS
-        )
-      );
+      await this.runQmdCommand(['embed'], timeout);
     }
 
     return {
@@ -149,6 +145,23 @@ class SearchService {
       elapsedMs: Date.now() - started,
       commands,
     };
+  }
+
+  private async refreshQmdCollections(timeout: number): Promise<string[]> {
+    const commands: string[] = [];
+
+    for (const source of this.sources(DEFAULT_COLLECTIONS)) {
+      commands.push(`collection remove ${source.collection}`);
+      await this.runOptionalQmdCommand(['collection', 'remove', source.collection], timeout);
+
+      commands.push(`collection add ${source.collection}`);
+      await this.runQmdCommand(
+        ['collection', 'add', source.dir, '--name', source.collection],
+        timeout
+      );
+    }
+
+    return commands;
   }
 
   private defaultBackend(): SearchBackend {
@@ -203,6 +216,14 @@ class SearchService {
         }
       );
     });
+  }
+
+  private async runOptionalQmdCommand(args: string[], timeout: number): Promise<void> {
+    try {
+      await this.runQmdCommand(args, timeout);
+    } catch (err) {
+      log.debug({ err, args }, 'Optional QMD command failed');
+    }
   }
 
   private parseTimeout(value: string | undefined, fallback: number): number {
