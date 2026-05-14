@@ -72,12 +72,17 @@ const ws = new WebSocket('ws://localhost:3001/ws?api_key=your-api-key');
 
 ### Environment Variables
 
-| Variable                        | Default | Description                                        |
-| ------------------------------- | ------- | -------------------------------------------------- |
-| `VERITAS_AUTH_ENABLED`          | `true`  | Enable/disable authentication                      |
-| `VERITAS_AUTH_LOCALHOST_BYPASS` | `false` | Allow unauthenticated localhost requests           |
-| `VERITAS_ADMIN_KEY`             | (none)  | Admin API key with full access                     |
-| `VERITAS_API_KEYS`              | (none)  | Comma-separated API keys (format: `name:key:role`) |
+| Variable                        | Default                  | Description                                                                         |
+| ------------------------------- | ------------------------ | ----------------------------------------------------------------------------------- |
+| `VERITAS_AUTH_ENABLED`          | `true`                   | Enable/disable authentication                                                       |
+| `VERITAS_AUTH_LOCALHOST_BYPASS` | `false`                  | Allow unauthenticated localhost requests                                            |
+| `VERITAS_ADMIN_KEY`             | (none)                   | Admin API key with full access                                                      |
+| `VERITAS_API_KEYS`              | (none)                   | Comma-separated API keys (format: `name:key:role`)                                  |
+| `KANBAN_SIG_GRACE_DAYS`         | `30` dev / `0` prod      | Allows unsigned mutating API requests during rollout; set `0` to require signatures |
+| `KANBAN_HMAC_SECRETS`           | (none)                   | Per-actor signing secrets, format `actor:64hex,actor2:64hex`                        |
+| `KANBAN_HMAC_SECRET`            | (none)                   | Shared fallback 64-hex signing secret                                               |
+| `KANBAN_HMAC_SECRET_FILE`       | `~/.secrets/kanban-hmac` | Shared fallback secret file                                                         |
+| `KANBAN_AGENT_REGISTRY_PATH`    | (none)                   | Optional path to an agent registry JSON used to reject unknown actors               |
 
 ### API Key Format
 
@@ -90,6 +95,28 @@ Example:
 ```
 veritas:vk_abc123xyz:agent,dashboard:vk_def456uvw:read-only
 ```
+
+### Kanban HMAC Signatures
+
+Mutating API requests can also be signed with HMAC-SHA256. This protects agent writes from actor spoofing on top of the normal API key/JWT authentication layer.
+
+Clients sign the canonical API path, including any query string and excluding the base URL. The payload is:
+
+```
+METHOD + "\n" + PATH + "\n" + ISO_TIMESTAMP + "\n" + SHA256_HEX_BODY
+```
+
+The signature is sent with:
+
+```
+X-Kanban-Actor: codex
+X-Kanban-Ts: 2026-05-14T22:00:00.000Z
+X-Kanban-Sig: <base64url hmac>
+```
+
+The built-in CLI signs `POST`, `PUT`, `PATCH`, and `DELETE` requests automatically. On first write it creates `~/.secrets/kanban-hmac` with mode `0600` if the file is missing. The secret file must live in a private directory such as `~/.secrets` with mode `0700`.
+
+For production, configure the server with the matching secret using `KANBAN_HMAC_SECRETS`, `KANBAN_HMAC_SECRET`, or `KANBAN_HMAC_SECRET_FILE`. Production defaults to rejecting unsigned mutating requests; set `KANBAN_SIG_GRACE_DAYS` explicitly only for a time-boxed rollout.
 
 ## Generating API Keys
 

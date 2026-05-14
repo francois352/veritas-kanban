@@ -66,6 +66,7 @@ import { cspNonceMiddleware, cspNonceDirective } from './middleware/csp-nonce.js
 import { healthRouter, apiHealthRouter, setHealthWss } from './routes/health.js';
 import { getPrometheusCollector } from './services/metrics/prometheus.js';
 import { metricsCollector } from './middleware/metrics-collector.js';
+import { kanbanSignatureMiddleware } from './middleware/kanban-signature.js';
 
 const log = createLogger('server');
 
@@ -343,7 +344,16 @@ const corsOptions: cors.CorsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key', 'X-API-Version', 'X-Request-ID'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-API-Key',
+    'X-API-Version',
+    'X-Request-ID',
+    'X-Kanban-Actor',
+    'X-Kanban-Ts',
+    'X-Kanban-Sig',
+  ],
 };
 
 // ============================================
@@ -369,7 +379,14 @@ app.use(cookieParser());
 // ============================================
 // Security: Request Size Limit (1MB)
 // ============================================
-app.use(express.json({ limit: '1mb' }));
+app.use(
+  express.json({
+    limit: '1mb',
+    verify(req, _res, buf) {
+      (req as express.Request & { rawBody?: string }).rawBody = buf.toString('utf8');
+    },
+  })
+);
 
 // Health checks (liveness, readiness, deep diagnostics)
 app.use('/health', healthRouter);
@@ -450,6 +467,12 @@ app.use('/api', authenticate);
 // Read-only roles can perform only GET/HEAD/OPTIONS on API routes.
 // ============================================
 app.use('/api', authorizeWrite);
+
+// ============================================
+// Kanban Actor Signatures
+// HMAC verification for mutating API requests from CLI/agent clients.
+// ============================================
+app.use('/api', kanbanSignatureMiddleware);
 
 // ============================================
 // API Versioning Middleware

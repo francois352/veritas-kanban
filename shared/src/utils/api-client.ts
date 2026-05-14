@@ -13,26 +13,54 @@ interface ApiEnvelope<T> {
   meta?: Record<string, unknown>;
 }
 
+export type ApiRequestPreparer = (
+  path: string,
+  options: RequestInit
+) => RequestInit | Promise<RequestInit>;
+
+export interface ApiClientOptions {
+  prepareRequest?: ApiRequestPreparer;
+}
+
+function extractErrorMessage(error: unknown, fallback: string): string {
+  if (!error || typeof error !== 'object') return fallback;
+
+  const record = error as Record<string, unknown>;
+  if (typeof record.error === 'string') return record.error;
+  if (record.error && typeof record.error === 'object') {
+    const nested = record.error as Record<string, unknown>;
+    if (typeof nested.message === 'string') return nested.message;
+  }
+  if (typeof record.message === 'string') return record.message;
+
+  return fallback;
+}
+
 /**
  * Create an API client instance
  * @param baseUrl - Base URL for the API (default: http://localhost:3001)
+ * @param clientOptions - Optional request preparation hook for CLI/MCP concerns
  * @returns API client function
  */
-export function createApiClient(baseUrl = DEFAULT_BASE) {
+export function createApiClient(baseUrl = DEFAULT_BASE, clientOptions: ApiClientOptions = {}) {
   return async function api<T>(path: string, options?: RequestInit): Promise<T> {
-    const res = await fetch(`${baseUrl}${path}`, {
+    const requestOptions: RequestInit = {
       ...options,
       headers: {
         'Content-Type': 'application/json',
         ...options?.headers,
       },
-    });
+    };
+
+    const preparedOptions = clientOptions.prepareRequest
+      ? await clientOptions.prepareRequest(path, requestOptions)
+      : requestOptions;
+
+    const res = await fetch(`${baseUrl}${path}`, preparedOptions);
 
     if (!res.ok) {
-      const error = (await res.json().catch(() => ({ error: res.statusText }))) as {
-        error?: string;
-      };
-      throw new Error(error.error || `API error: ${res.status}`);
+      const error = await res.json().catch(() => ({ error: res.statusText }));
+      throw new Error(extractErrorMessage(error, `API error: ${res.status}`));
     }
 
     if (res.status === 204) {
