@@ -66,6 +66,10 @@ import { cspNonceMiddleware, cspNonceDirective } from './middleware/csp-nonce.js
 import { healthRouter, apiHealthRouter, setHealthWss } from './routes/health.js';
 import { getPrometheusCollector } from './services/metrics/prometheus.js';
 import { metricsCollector } from './middleware/metrics-collector.js';
+import {
+  getStaleTaskWatchdogService,
+  disposeStaleTaskWatchdogService,
+} from './services/stale-task-watchdog-service.js';
 
 const log = createLogger('server');
 
@@ -568,6 +572,7 @@ let configService: ConfigService | null = null;
     syncSettingsToServices(featureSettings);
     await getTelemetryService().init();
     await getPolicyService().waitForInit();
+    getStaleTaskWatchdogService().start();
   } catch (err) {
     log.fatal({ err }, 'Failed to initialize services — server cannot start safely');
     process.exit(1);
@@ -960,6 +965,7 @@ async function gracefulShutdown(signal: string) {
 
     // Dispose task service (closes file watchers, clears cache)
     disposeTaskService();
+    disposeStaleTaskWatchdogService();
     log.info('Task service disposed');
 
     // Dispose config service (closes file watcher, clears cache)
