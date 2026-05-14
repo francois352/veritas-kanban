@@ -46,7 +46,32 @@ jobs:
         run: pnpm run typecheck
 
       - name: Run tests
-        run: pnpm test
+        run: |
+          PORT=3001
+          DATA_DIR="$RUNNER_TEMP/veritas-test-data"
+          mkdir -p "$DATA_DIR"
+          VERITAS_ADMIN_KEY=ci-test-admin-key-0000000000000000 \
+            VERITAS_AUTH_ENABLED=false \
+            VERITAS_DISABLE_WATCHERS=1 \
+            DATA_DIR="$DATA_DIR" \
+            PORT="$PORT" \
+            pnpm --filter @veritas-kanban/server start > "$RUNNER_TEMP/veritas-test-server.log" 2>&1 &
+          SERVER_PID=$!
+          trap 'kill "$SERVER_PID" 2>/dev/null || true' EXIT
+
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:${PORT}/api/health" >/dev/null; then
+              break
+            fi
+            if ! kill -0 "$SERVER_PID" 2>/dev/null; then
+              cat "$RUNNER_TEMP/veritas-test-server.log"
+              exit 1
+            fi
+            sleep 1
+          done
+
+          curl -fsS "http://127.0.0.1:${PORT}/api/health" >/dev/null
+          pnpm test
 
   # ─── Deploy to VPS ──────────────────────────────────────────────
   deploy:
