@@ -610,10 +610,12 @@ vk list --project legacy-app --status in-progress --json | \
 
 The CLI reads configuration from environment variables:
 
-| Variable     | Default                 | Description                |
-| ------------ | ----------------------- | -------------------------- |
-| `VK_API_URL` | `http://localhost:3001` | Veritas Kanban server URL  |
-| `VK_API_KEY` | _(none)_                | API key for authentication |
+| Variable                  | Default                  | Description                                                            |
+| ------------------------- | ------------------------ | ---------------------------------------------------------------------- |
+| `VK_API_URL`              | `http://localhost:3001`  | Veritas Kanban server URL                                              |
+| `VK_API_KEY`              | _(none)_                 | API key for authentication                                             |
+| `KANBAN_ACTOR`            | current OS user          | Actor sent in HMAC-signed write request headers                        |
+| `KANBAN_HMAC_SECRET_FILE` | `~/.secrets/kanban-hmac` | 64-hex HMAC secret; auto-created on first write in a private directory |
 
 ### Setting the API URL
 
@@ -633,6 +635,16 @@ export VK_API_KEY=your-api-key-here
 ```
 
 If you're running locally with localhost auth bypass enabled (the default), you may not need an API key for most operations.
+
+### Signed Writes
+
+The CLI signs all mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`) with HMAC-SHA256. Set `KANBAN_ACTOR` to the actor name expected by the server, for example:
+
+```bash
+export KANBAN_ACTOR=codex
+```
+
+The first write creates `~/.secrets/kanban-hmac` if it is missing and prints the path to stderr. The secret file must live in a private directory such as `~/.secrets` with mode `0700`. The server must be configured with the same 64-hex secret before unsigned writes are disabled. The signed path is the API path, including any query string and excluding `VK_API_URL`.
 
 ---
 

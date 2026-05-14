@@ -186,13 +186,16 @@ open http://localhost:3001
 
 ### Required environment variables for Docker
 
-| Variable             | Required    | Description                                                                                 |
-| -------------------- | ----------- | ------------------------------------------------------------------------------------------- |
-| `VERITAS_ADMIN_KEY`  | **Yes**     | Admin API key (≥ 32 chars). Generate: `openssl rand -hex 32`                                |
-| `VERITAS_JWT_SECRET` | Recommended | JWT signing secret. Without it, sessions reset on restart. Generate: `openssl rand -hex 64` |
-| `PORT`               | No          | Defaults to `3001`                                                                          |
-| `NODE_ENV`           | No          | Defaults to `production` in Docker. **Do not set to `development`**                         |
-| `DATA_DIR`           | No          | Defaults to `/app/data`. Map a volume here for persistence                                  |
+| Variable                  | Required    | Description                                                                                    |
+| ------------------------- | ----------- | ---------------------------------------------------------------------------------------------- |
+| `VERITAS_ADMIN_KEY`       | **Yes**     | Admin API key (≥ 32 chars). Generate: `openssl rand -hex 32`                                   |
+| `VERITAS_JWT_SECRET`      | Recommended | JWT signing secret. Without it, sessions reset on restart. Generate: `openssl rand -hex 64`    |
+| `PORT`                    | No          | Defaults to `3001`                                                                             |
+| `NODE_ENV`                | No          | Defaults to `production` in Docker. **Do not set to `development`**                            |
+| `DATA_DIR`                | No          | Defaults to `/app/data`. Map a volume here for persistence                                     |
+| `KANBAN_SIG_GRACE_DAYS`   | No          | Defaults to `0` in production and `30` in development. Keep `0` to require signed agent writes |
+| `KANBAN_HMAC_SECRETS`     | Recommended | Per-actor HMAC secrets, format `codex:<64hex>,claude:<64hex>`                                  |
+| `KANBAN_HMAC_SECRET_FILE` | Optional    | Shared HMAC secret file. Its parent directory must be private, for example mode `0700`         |
 
 ### When do you use `NODE_ENV=development`?
 
@@ -501,14 +504,19 @@ All variables are set in `server/.env` (or passed as environment variables in Do
 
 ### Authentication
 
-| Variable                        | Default        | Description                                                                                                                                            |
-| ------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `VERITAS_AUTH_ENABLED`          | `true`         | Enable/disable authentication. Set `false` to disable (not recommended for production)                                                                 |
-| `VERITAS_ADMIN_KEY`             | —              | Admin API key with full access. **Must be ≥ 32 characters.** Generate with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
-| `VERITAS_API_KEYS`              | —              | Additional API keys. Format: `name:key:role,name2:key2:role2`. Roles: `admin`, `agent`, `read-only`                                                    |
-| `VERITAS_JWT_SECRET`            | auto-generated | JWT signing secret for user sessions. If unset, auto-generated (sessions won't survive restarts). Generate with: `openssl rand -hex 64`                |
-| `VERITAS_AUTH_LOCALHOST_BYPASS` | `false`        | Allow unauthenticated requests from localhost                                                                                                          |
-| `VERITAS_AUTH_LOCALHOST_ROLE`   | `read-only`    | Role for unauthenticated localhost connections: `read-only`, `agent`, or `admin`                                                                       |
+| Variable                        | Default                  | Description                                                                                                                                            |
+| ------------------------------- | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `VERITAS_AUTH_ENABLED`          | `true`                   | Enable/disable authentication. Set `false` to disable (not recommended for production)                                                                 |
+| `VERITAS_ADMIN_KEY`             | —                        | Admin API key with full access. **Must be ≥ 32 characters.** Generate with: `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `VERITAS_API_KEYS`              | —                        | Additional API keys. Format: `name:key:role,name2:key2:role2`. Roles: `admin`, `agent`, `read-only`                                                    |
+| `VERITAS_JWT_SECRET`            | auto-generated           | JWT signing secret for user sessions. If unset, auto-generated (sessions won't survive restarts). Generate with: `openssl rand -hex 64`                |
+| `VERITAS_AUTH_LOCALHOST_BYPASS` | `false`                  | Allow unauthenticated requests from localhost                                                                                                          |
+| `VERITAS_AUTH_LOCALHOST_ROLE`   | `read-only`              | Role for unauthenticated localhost connections: `read-only`, `agent`, or `admin`                                                                       |
+| `KANBAN_SIG_GRACE_DAYS`         | `30` dev / `0` prod      | Unsigned write grace period toggle. Set `0` to require HMAC signatures on mutating API requests                                                        |
+| `KANBAN_HMAC_SECRETS`           | —                        | Per-actor signing secrets: `actor:64hex,actor2:64hex`                                                                                                  |
+| `KANBAN_HMAC_SECRET`            | —                        | Shared fallback 64-hex HMAC signing secret                                                                                                             |
+| `KANBAN_HMAC_SECRET_FILE`       | `~/.secrets/kanban-hmac` | Shared fallback secret file. Parent directory must be private, for example mode `0700`                                                                 |
+| `KANBAN_AGENT_REGISTRY_PATH`    | —                        | Optional JSON registry path; when set, signed actors must match registry `id` or `addresses.kanban_actor`                                              |
 
 ### Networking & Security
 
