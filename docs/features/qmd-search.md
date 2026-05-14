@@ -32,7 +32,7 @@ Install QMD and create the initial collections:
 
 ```bash
 npm install -g @tobilu/qmd
-scripts/qmd/setup-veritas-qmd.sh
+pnpm qmd:setup
 ```
 
 Then start VK with QMD enabled:
@@ -40,6 +40,14 @@ Then start VK with QMD enabled:
 ```bash
 VERITAS_SEARCH_BACKEND=qmd pnpm dev
 ```
+
+Refresh the index after larger task/doc changes:
+
+```bash
+pnpm qmd:refresh
+```
+
+Set `VERITAS_QMD_SKIP_EMBED=true` to run `qmd update` without `qmd embed`.
 
 ## API
 
@@ -56,9 +64,21 @@ curl -X POST http://localhost:3001/api/search \
 
 The response includes `backend`, `degraded`, and optional `reason` fields so clients can show whether QMD or fallback search served the request.
 
+## App UI
+
+Open the search dialog from the header search icon or the command palette action named **Search Tasks and Docs**. The dialog can query active tasks, archived tasks, and docs, and it shows whether the response came from QMD or keyword fallback.
+
+Task results open directly in the board detail panel when the result path maps to a task markdown file.
+
+## Duplicate Detection
+
+The create-task dialog checks active and archived task collections after the title has enough signal. Possible matches are shown inline and can be opened for inspection, but task creation remains available so intentional follow-up work is not blocked.
+
+## Index Maintenance
+
+The admin-only API exposes `POST /api/search/index/refresh` for operators and automation. Send `{ "embed": false }` to update collections without recomputing embeddings.
+
 ## Next v4.1 PRs
 
-- Search UI
-- Duplicate detection hints during task creation
 - VERITAS context injection
-- Scheduled QMD update/embed maintenance
+- Add deployment-specific schedules as needed with `pnpm qmd:refresh` or `POST /api/search/index/refresh`.
