@@ -48,6 +48,7 @@ function sign({
 
 describe('kanbanSignatureMiddleware', () => {
   const originalEnv = { ...process.env };
+  const auditPath = path.join(os.tmpdir(), `veritas-audit-${process.pid}.jsonl`);
 
   beforeEach(() => {
     process.env = {
@@ -57,11 +58,15 @@ describe('kanbanSignatureMiddleware', () => {
       KANBAN_HMAC_SECRET: '',
       KANBAN_HMAC_SECRET_FILE: '/tmp/veritas-test-missing-kanban-hmac',
       KANBAN_AGENT_REGISTRY_PATH: '',
+      KANBAN_SIG_AUDIT_LOG_PATH: auditPath,
+      KANBAN_SIG_DISABLE: 'false',
     };
+    fs.rmSync(auditPath, { force: true });
   });
 
   afterEach(() => {
     process.env = { ...originalEnv };
+    fs.rmSync(auditPath, { force: true });
   });
 
   it('accepts a signed kanban write', async () => {
@@ -217,5 +222,34 @@ describe('kanbanSignatureMiddleware', () => {
     expect(response.body).toMatchObject({
       code: 'KANBAN_SIGNATURE_REPLAY',
     });
+  });
+
+  it('writes an audit row when signature validation rejects', async () => {
+    const app = createApp();
+    await request(app).post(PATH).send({ author: 'codex', text: 'unsigned write' }).expect(401);
+
+    const lines = fs.readFileSync(auditPath, 'utf8').trim().split('\n');
+    expect(lines.length).toBe(1);
+    const row = JSON.parse(lines[0]);
+    expect(row).toMatchObject({ reason: 'missing', method: 'POST' });
+  });
+
+  it('accepts unsigned write when grace period is active and sets warning header', async () => {
+    process.env.KANBAN_SIG_GRACE_DAYS = '2';
+    const app = createApp();
+
+    const response = await request(app)
+      .post(PATH)
+      .send({ author: 'codex', text: 'grace unsigned write' })
+      .expect(201);
+    expect(response.headers['x-kanban-signature-warn']).toBe('unsigned-write-grace-mode');
+  });
+
+  it('bypasses signature checks when KANBAN_SIG_DISABLE=true', async () => {
+    process.env.KANBAN_SIG_DISABLE = 'true';
+    process.env.KANBAN_SIG_GRACE_DAYS = '0';
+    const app = createApp();
+
+    await request(app).post(PATH).send({ author: 'codex', text: 'disabled checks' }).expect(201);
   });
 });
