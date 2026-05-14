@@ -1466,6 +1466,66 @@ Returns past errors similar to the query string — useful for avoiding repeated
 
 ---
 
+## Search
+
+QMD-ready retrieval across task markdown and docs. The endpoint uses the configured backend and gracefully falls back to keyword search when QMD is unavailable.
+
+Mounted at `/api/search`.
+
+| Method | Path          | Description                                     |
+| ------ | ------------- | ----------------------------------------------- |
+| `POST` | `/api/search` | Search task and docs collections with one query |
+
+### Search Collections
+
+```
+POST /api/search
+```
+
+**Body**:
+
+```json
+{
+  "query": "semantic search duplicate detection",
+  "limit": 10,
+  "collections": ["tasks-active", "tasks-archive", "docs"],
+  "backend": "auto"
+}
+```
+
+`backend` may be `keyword`, `qmd`, or `auto`. QMD is opt-in via `VERITAS_SEARCH_BACKEND=qmd` or per-request `backend: "qmd"`.
+
+**Response** `200`:
+
+```json
+{
+  "query": "semantic search duplicate detection",
+  "backend": "keyword",
+  "degraded": false,
+  "elapsedMs": 12,
+  "results": [
+    {
+      "id": "tasks/active/task_20260504_example.md",
+      "title": "Add semantic search",
+      "path": "tasks/active/task_20260504_example.md",
+      "collection": "tasks-active",
+      "snippet": "Wire QMD retrieval into Veritas.",
+      "score": 4
+    }
+  ]
+}
+```
+
+### QMD Setup
+
+```bash
+npm install -g @tobilu/qmd
+scripts/qmd/setup-veritas-qmd.sh
+VERITAS_SEARCH_BACKEND=qmd pnpm dev
+```
+
+---
+
 ## Tool Policies
 
 Role-based tool access restrictions — control which tools each agent role can use.
@@ -1765,15 +1825,15 @@ These endpoints follow the same auth/error patterns documented above:
 | `/api/integrations`              | External integrations                         |
 | `/api/settings/transition-hooks` | Status transition hooks                       |
 
-| `/api/feedback`                  | User feedback & sentiment analytics           |
-| `/api/decisions`                 | Decision audit trail                          |
-| `/api/drift`                     | Behavioral drift detection                    |
-| `/api/policies`                  | Agent policy & guard engine                   |
-| `/api/scoring/profiles`          | Output evaluation profiles                    |
-| `/api/scoring/evaluate`          | Run an output evaluation                      |
-| `/api/scoring/history`           | Evaluation history                            |
-| `/api/prompt-registry`           | Prompt template registry                      |
-| `/api/v1/system/health`          | Global system health                          |
+| `/api/feedback` | User feedback & sentiment analytics |
+| `/api/decisions` | Decision audit trail |
+| `/api/drift` | Behavioral drift detection |
+| `/api/policies` | Agent policy & guard engine |
+| `/api/scoring/profiles` | Output evaluation profiles |
+| `/api/scoring/evaluate` | Run an output evaluation |
+| `/api/scoring/history` | Evaluation history |
+| `/api/prompt-registry` | Prompt template registry |
+| `/api/v1/system/health` | Global system health |
 
 ---
 
@@ -1863,9 +1923,7 @@ Query params: `agent`, `since`, `until`.
     { "category": "output-quality", "count": 18 },
     { "category": "accuracy", "count": 12 }
   ],
-  "trend": [
-    { "date": "2026-03-21", "positive": 5, "neutral": 1, "negative": 0 }
-  ]
+  "trend": [{ "date": "2026-03-21", "positive": 5, "neutral": 1, "negative": 0 }]
 }
 ```
 

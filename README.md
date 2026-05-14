@@ -297,7 +297,7 @@ Veritas Kanban is neither. It's the **visual command center for agentic work** �
 | **YAML workflow pipelines**     |      ✅ Loops, gates, parallel      |     ⚠️ Code-defined only     |          ❌           |
 | **Real-time agent dashboard**   |    ✅ Status, model attribution     |              ❌              |          ❌           |
 | **Agent communication**         | ✅ Squad Chat with lifecycle events |       ⚠️ Internal only       |          ❌           |
-| **MCP server**                  |             ✅ 33+ tools            |              ❌              |          ❌           |
+| **MCP server**                  |            ✅ 33+ tools             |              ❌              |          ❌           |
 | **CLI**                         |          ✅ Full lifecycle          |              ❌              |      ⚠️ Limited       |
 | **Git worktrees + code review** |             ✅ Built-in             |              ❌              |          ❌           |
 | **Task persistence**            |          ✅ Markdown files          |         ❌ In-memory         |      ✅ Database      |
@@ -673,19 +673,19 @@ pnpm test:e2e   # E2E tests (Playwright)
 
 ## 📚 Documentation
 
-| Document                                   | Description                      |
-| ------------------------------------------ | -------------------------------- |
-| [Features](docs/FEATURES.md)               | Complete feature reference       |
-| [API Reference](docs/API-REFERENCE.md)     | Auth, endpoints, WebSocket docs  |
-| [CLI Guide](docs/CLI-GUIDE.md)             | Comprehensive CLI usage guide    |
+| Document                                       | Description                                  |
+| ---------------------------------------------- | -------------------------------------------- |
+| [Features](docs/FEATURES.md)                   | Complete feature reference                   |
+| [API Reference](docs/API-REFERENCE.md)         | Auth, endpoints, WebSocket docs              |
+| [CLI Guide](docs/CLI-GUIDE.md)                 | Comprehensive CLI usage guide                |
 | [Self-Hosting Guide](docs/guides/SELF_HOST.md) | Production deployment, reverse proxy, Docker |
-| [Deployment](docs/DEPLOYMENT.md)           | Docker, bare metal, env config   |
-| [Troubleshooting](docs/TROUBLESHOOTING.md) | Common issues & solutions        |
-| [Contributing](CONTRIBUTING.md)            | How to contribute, PR guidelines |
-| [Security Policy](SECURITY.md)             | Vulnerability reporting          |
-| [Code of Conduct](CODE_OF_CONDUCT.md)      | Community guidelines             |
-| [Changelog](CHANGELOG.md)                  | Release history                  |
-| [Sprint Docs](docs/)                       | Sprint planning & audit reports  |
+| [Deployment](docs/DEPLOYMENT.md)               | Docker, bare metal, env config               |
+| [Troubleshooting](docs/TROUBLESHOOTING.md)     | Common issues & solutions                    |
+| [Contributing](CONTRIBUTING.md)                | How to contribute, PR guidelines             |
+| [Security Policy](SECURITY.md)                 | Vulnerability reporting                      |
+| [Code of Conduct](CODE_OF_CONDUCT.md)          | Community guidelines                         |
+| [Changelog](CHANGELOG.md)                      | Release history                              |
+| [Sprint Docs](docs/)                           | Sprint planning & audit reports              |
 
 ---
 
@@ -760,6 +760,7 @@ See the [open issues](https://github.com/BradGroux/veritas-kanban/issues) for wh
 
 ### Backlog
 
+- [QMD Retrieval for Veritas Kanban](https://github.com/BradGroux/veritas-kanban/issues/171) — v4.1 staged track for task/docs search, duplicate detection, context injection, and index maintenance
 - [WCAG 2.1 AA accessibility](https://github.com/BradGroux/veritas-kanban/issues/1) — Full keyboard navigation, screen reader support, color contrast
 - [Example video](https://github.com/BradGroux/veritas-kanban/issues/68) — Hosted walkthrough video on YouTube or Vimeo
 

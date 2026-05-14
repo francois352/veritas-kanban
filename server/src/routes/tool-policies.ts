@@ -12,6 +12,7 @@ import express from 'express';
 import { z } from 'zod';
 import { getToolPolicyService } from '../services/tool-policy-service.js';
 import { createLogger } from '../lib/logger.js';
+import { authorize } from '../middleware/auth.js';
 
 const router = express.Router();
 const log = createLogger('routes:tool-policies');
@@ -83,6 +84,7 @@ router.get(
  */
 router.post(
   '/',
+  authorize('admin'),
   asyncHandler(async (req, res) => {
     const policy = ToolPolicySchema.parse(req.body);
     await toolPolicyService.savePolicy(policy);
@@ -96,6 +98,7 @@ router.post(
  */
 router.put(
   '/:role',
+  authorize('admin'),
   asyncHandler(async (req, res) => {
     const { role } = RoleParamSchema.parse(req.params);
     const policyData = ToolPolicySchema.parse(req.body);
@@ -122,6 +125,7 @@ router.put(
  */
 router.delete(
   '/:role',
+  authorize('admin'),
   asyncHandler(async (req, res) => {
     const { role } = RoleParamSchema.parse(req.params);
     await toolPolicyService.deletePolicy(role);
@@ -135,6 +139,7 @@ router.delete(
  */
 router.post(
   '/:role/validate',
+  authorize('admin'),
   asyncHandler(async (req, res) => {
     const { role } = RoleParamSchema.parse(req.params);
     const { tool } = z.object({ tool: z.string().min(1) }).parse(req.body);

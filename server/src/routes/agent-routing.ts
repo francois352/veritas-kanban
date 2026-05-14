@@ -12,6 +12,7 @@ import { getAgentRoutingService } from '../services/agent-routing-service.js';
 import { getTaskService } from '../services/task-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError, ValidationError } from '../middleware/error-handler.js';
+import { authorize } from '../middleware/auth.js';
 
 const router: RouterType = Router();
 
@@ -127,6 +128,7 @@ router.get(
  */
 router.put(
   '/routing',
+  authorize('admin'),
   asyncHandler(async (req, res) => {
     let parsed;
     try {
