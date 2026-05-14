@@ -16,6 +16,7 @@ const WATCHDOG_AUTHOR = 'veritas-watchdog';
 const DEFAULT_TASK_THRESHOLD_MINUTES = 30;
 const DEFAULT_HEARTBEAT_THRESHOLD_MINUTES = 10;
 const DEFAULT_COMMENT_THROTTLE_MINUTES = 30;
+const DEFAULT_MAX_WATCHDOG_COMMENTS_PER_TASK = 3;
 const DEFAULT_INTERVAL_MS = 5 * 60 * 1000;
 const DEFAULT_MAX_COMMENTS_PER_RUN = 20;
 
@@ -99,6 +100,10 @@ function normalizeRef(value: string | undefined): string {
 
 function slugRef(value: string | undefined): string {
   return normalizeRef(value).replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function isWatchdogComment(comment: Comment): boolean {
+  return comment.author === WATCHDOG_AUTHOR && comment.text.startsWith(STALE_COMMENT_PREFIX);
 }
 
 export class StaleTaskWatchdogService {
@@ -377,10 +382,25 @@ export class StaleTaskWatchdogService {
       return false;
     }
 
+    const maxCommentsPerTask = parsePositiveInt(
+      process.env.VERITAS_STALE_TASK_MAX_COMMENTS_PER_TASK,
+      DEFAULT_MAX_WATCHDOG_COMMENTS_PER_TASK
+    );
+    const watchdogCommentCount = (task.comments ?? []).filter(isWatchdogComment).length;
+    if (watchdogCommentCount >= maxCommentsPerTask) {
+      log.info(
+        { taskId: task.id, watchdogCommentCount, maxCommentsPerTask },
+        'Stale task watchdog comment cap reached'
+      );
+      return false;
+    }
+
+    const taskUpdatedAt = parseIso(task.updated) ?? 0;
     const recentCommentAt = this.getRecentWatchdogCommentTimestamp(
       task.comments ?? [],
       nowMs,
-      throttleMinutes
+      throttleMinutes,
+      taskUpdatedAt
     );
     if (recentCommentAt !== null) {
       this.commentThrottleByTask.set(task.id, recentCommentAt);
@@ -394,7 +414,13 @@ export class StaleTaskWatchdogService {
       timestamp: new Date(nowMs).toISOString(),
     };
 
-    const updated = await this.taskService.appendComment(task.id, comment);
+    let updated: Task | null = null;
+    try {
+      updated = await this.taskService.appendComment(task.id, comment);
+    } catch (err) {
+      log.warn({ err, taskId: task.id }, 'Stale task watchdog comment append failed');
+      return false;
+    }
     if (!updated) {
       log.warn({ taskId: task.id }, 'Stale task watchdog failed to persist comment');
       return false;
@@ -445,17 +471,16 @@ export class StaleTaskWatchdogService {
   private getRecentWatchdogCommentTimestamp(
     comments: Comment[],
     nowMs: number,
-    throttleMinutes: number
+    throttleMinutes: number,
+    ignoreBeforeMs: number
   ): number | null {
     const throttleMs = throttleMinutes * 60_000;
     let latest: number | null = null;
 
     for (const comment of comments) {
-      if (comment.author !== WATCHDOG_AUTHOR || !comment.text.startsWith(STALE_COMMENT_PREFIX)) {
-        continue;
-      }
+      if (!isWatchdogComment(comment)) continue;
       const timestamp = parseIso(comment.timestamp);
-      if (timestamp !== null && nowMs - timestamp < throttleMs) {
+      if (timestamp !== null && timestamp >= ignoreBeforeMs && nowMs - timestamp < throttleMs) {
         latest = latest === null ? timestamp : Math.max(latest, timestamp);
       }
     }

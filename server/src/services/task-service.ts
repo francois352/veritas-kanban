@@ -936,20 +936,35 @@ export class TaskService {
     const task = await this.getTask(id);
     if (!task) return null;
 
-    const filepath = path.join(this.tasksDir, this.taskToFilename(task));
+    const initialFilename = (await this.findTaskFile(this.tasksDir, id)) ?? this.taskToFilename(task);
+    const filepath = path.join(this.tasksDir, initialFilename);
     let updatedTask!: Task;
 
     await withFileLock(filepath, async () => {
-      const freshTask = this.cacheGet(id) ?? task;
+      const freshFilename = (await this.findTaskFile(this.tasksDir, id)) ?? initialFilename;
+      const freshPath = path.join(this.tasksDir, freshFilename);
+      const content = await fs.readFile(freshPath, 'utf-8');
+      const freshTask = this.parseTaskFile(content, freshFilename);
+      if (!freshTask) {
+        throw new Error(`Unable to parse task before appending comment: ${id}`);
+      }
+
       updatedTask = {
         ...freshTask,
         comments: [...(freshTask.comments ?? []), comment],
         updated: new Date().toISOString(),
       };
 
-      const content = this.taskToMarkdown(updatedTask);
+      const updatedContent = this.taskToMarkdown(updatedTask);
+      const tmpPath = `${freshPath}.tmp.${process.pid}.${Date.now()}`;
       this.markWrite();
-      await fs.writeFile(path.join(this.tasksDir, this.taskToFilename(freshTask)), content, 'utf-8');
+      try {
+        await fs.writeFile(tmpPath, updatedContent, 'utf-8');
+        await fs.rename(tmpPath, freshPath);
+      } catch (error) {
+        await fs.unlink(tmpPath).catch(() => {});
+        throw error;
+      }
       this.cache.set(updatedTask.id, updatedTask);
     });
 

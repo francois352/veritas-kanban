@@ -235,7 +235,7 @@ describe('StaleTaskWatchdogService', () => {
     });
 
     tasks[0].status = 'done';
-    tasks[0].comments = [];
+    tasks[0].updated = '2026-05-15T00:50:00.000Z';
 
     vi.setSystemTime(new Date('2026-05-15T00:50:00.000Z'));
     const recovered = await service.run({
@@ -246,6 +246,8 @@ describe('StaleTaskWatchdogService', () => {
     });
 
     tasks[0].status = 'in-progress';
+    tasks[0].updated = '2026-05-15T00:50:00.000Z';
+    vi.setSystemTime(new Date('2026-05-15T01:10:00.000Z'));
     const staleAgain = await service.run({
       postComments: true,
       taskThresholdMinutes: 30,
@@ -258,6 +260,43 @@ describe('StaleTaskWatchdogService', () => {
     expect(recovered.commentsPosted).toBe(0);
     expect(staleAgain.commentsPosted).toBe(1);
     expect(taskService.appendComment).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not append unlimited watchdog comments to one task', async () => {
+    const comments = Array.from({ length: 3 }, (_, index) => ({
+      id: `comment_${index}`,
+      author: 'veritas-watchdog',
+      text: 'STALE CHECK: previous reminder',
+      timestamp: `2026-05-15T00:0${index}:00.000Z`,
+    }));
+    const tasks = [
+      makeTask({
+        updated: '2026-05-15T00:00:00.000Z',
+        comments,
+      }),
+    ];
+    const { service, taskService } = makeService(
+      tasks,
+      [
+        makeAgent({
+          status: 'offline',
+          lastHeartbeat: '2026-05-15T00:10:00.000Z',
+        }),
+      ]
+    );
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-15T02:00:00.000Z'));
+    const result = await service.run({
+      postComments: true,
+      taskThresholdMinutes: 30,
+      heartbeatThresholdMinutes: 10,
+      commentThrottleMinutes: 30,
+    });
+    vi.useRealTimers();
+
+    expect(result.commentsPosted).toBe(0);
+    expect(taskService.appendComment).not.toHaveBeenCalled();
   });
 
   it('treats older non-active tasks as checkpoint issues when the agent is busy elsewhere', async () => {
