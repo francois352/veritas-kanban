@@ -1,7 +1,7 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/async-handler.js';
-import { authorize } from '../middleware/auth.js';
+import { authorize, type AuthenticatedRequest } from '../middleware/auth.js';
 import { ValidationError } from '../middleware/error-handler.js';
 import { getSearchService } from '../services/search-service.js';
 import type { SearchBackend, SearchCollection } from '../services/search-service.js';
@@ -51,13 +51,16 @@ router.post(
     }
 
     const body = parsed.data;
+    const auth = (req as AuthenticatedRequest).auth;
+    const requestedBackend = body.backend as SearchBackend | undefined;
+    const backend = auth?.role === 'read-only' ? 'keyword' : requestedBackend;
     const service = getSearchService();
     const result = await service.search({
       query: body.query,
       limit: body.limit,
       collections: body.collections as SearchCollection[] | undefined,
-      backend: body.backend as SearchBackend | undefined,
-      minScore: body.minScore,
+      backend,
+      minScore: backend === 'keyword' ? undefined : body.minScore,
     });
     res.json(result);
   })

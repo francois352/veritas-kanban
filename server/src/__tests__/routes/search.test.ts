@@ -64,6 +64,54 @@ describe('searchRoutes', () => {
     });
   });
 
+  it('downgrades read-only qmd search requests to keyword search', async () => {
+    mockSearch.mockResolvedValue({
+      query: 'qmd',
+      backend: 'keyword',
+      degraded: false,
+      elapsedMs: 3,
+      results: [],
+    });
+
+    const res = await request(app)
+      .post('/api/search')
+      .set('x-test-role', 'read-only')
+      .send({ query: 'qmd', backend: 'qmd', minScore: 0.6 });
+
+    expect(res.status).toBe(200);
+    expect(mockSearch).toHaveBeenCalledWith({
+      query: 'qmd',
+      limit: undefined,
+      collections: undefined,
+      backend: 'keyword',
+      minScore: undefined,
+    });
+  });
+
+  it('allows agent keys to request qmd search', async () => {
+    mockSearch.mockResolvedValue({
+      query: 'qmd',
+      backend: 'qmd',
+      degraded: false,
+      elapsedMs: 3,
+      results: [],
+    });
+
+    const res = await request(app)
+      .post('/api/search')
+      .set('x-test-role', 'agent')
+      .send({ query: 'qmd', backend: 'qmd', minScore: 0.6 });
+
+    expect(res.status).toBe(200);
+    expect(mockSearch).toHaveBeenCalledWith({
+      query: 'qmd',
+      limit: undefined,
+      collections: undefined,
+      backend: 'qmd',
+      minScore: 0.6,
+    });
+  });
+
   it('POST /api/search validates query', async () => {
     const res = await request(app).post('/api/search').send({ query: '' });
     expect(res.status).toBe(400);

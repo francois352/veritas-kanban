@@ -18,7 +18,6 @@ export interface SearchResult {
   collection: SearchCollection | string;
   snippet: string;
   score: number;
-  metadata?: Record<string, unknown>;
 }
 
 export interface SearchResponse {

@@ -529,6 +529,19 @@ describe('Auth Middleware', () => {
       expect(next).toHaveBeenCalled();
     });
 
+    it('should allow read-only POST for prefixed search queries', () => {
+      const req = mockRequest({
+        method: 'POST',
+        originalUrl: '/veritas/api/v1/search',
+      }) as AuthenticatedRequest;
+      req.auth = { role: 'read-only', isLocalhost: false };
+      const res = mockResponse();
+      const next = mockNext();
+
+      authorizeWrite(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+
     it('should deny read-only POST for search index refresh', () => {
       const req = mockRequest({
         method: 'POST',

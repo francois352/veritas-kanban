@@ -119,6 +119,7 @@ describe('SearchService', () => {
               path: 'tasks/active/task_1.md',
               title: 'Semantic search',
               snippet: 'QMD result',
+              content: 'Private full document body should not be exposed.',
               score: 0.92,
               collection: 'tasks-active',
             },
@@ -137,6 +138,7 @@ describe('SearchService', () => {
       score: 0.92,
       collection: 'tasks-active',
     });
+    expect(result.results[0]).not.toHaveProperty('metadata');
     expect(execFileMock).toHaveBeenCalledWith(
       'qmd',
       [
@@ -271,6 +273,21 @@ describe('SearchService', () => {
       expect.objectContaining({ timeout: 60_000 }),
       expect.any(Function)
     );
+  });
+
+  it('ignores missing qmd collections during refresh registration', async () => {
+    execFileMock.mockImplementation((_bin, args, _options, callback) => {
+      if (args[0] === 'collection' && args[1] === 'remove') {
+        callback(new Error(`Collection not found: ${args[2]}`), '', '');
+        return;
+      }
+      callback(null, '', '');
+    });
+
+    const result = await new SearchService().refreshIndex({ embed: false });
+
+    expect(result.updated).toBe(true);
+    expect(execFileMock).toHaveBeenCalledTimes(7);
   });
 
   it('falls back to default qmd timeouts when env values are invalid', async () => {

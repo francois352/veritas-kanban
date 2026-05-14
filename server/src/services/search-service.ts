@@ -24,7 +24,6 @@ export interface SearchResult {
   collection: SearchCollection | string;
   snippet: string;
   score: number;
-  metadata?: Record<string, unknown>;
 }
 
 export interface SearchResponse {
@@ -149,8 +148,11 @@ class SearchService {
 
   private async refreshQmdCollections(timeout: number): Promise<string[]> {
     const commands: string[] = [];
+    const sources = this.sources(DEFAULT_COLLECTIONS);
 
-    for (const source of this.sources(DEFAULT_COLLECTIONS)) {
+    await Promise.all(sources.map((source) => fs.mkdir(source.dir, { recursive: true })));
+
+    for (const source of sources) {
       commands.push(`collection remove ${source.collection}`);
       await this.runOptionalQmdCommand(['collection', 'remove', source.collection], timeout);
 
@@ -207,8 +209,12 @@ class SearchService {
           timeout,
           maxBuffer: 2 * 1024 * 1024,
         },
-        (error, stdoutValue) => {
+        (error, stdoutValue, stderrValue) => {
           if (error) {
+            const stderr = String(stderrValue ?? '').trim();
+            if (stderr) {
+              error.message = `${error.message}\n${stderr}`;
+            }
             reject(error);
             return;
           }
@@ -222,8 +228,21 @@ class SearchService {
     try {
       await this.runQmdCommand(args, timeout);
     } catch (err) {
-      log.debug({ err, args }, 'Optional QMD command failed');
+      if (this.isMissingQmdCollectionError(err)) {
+        log.debug({ err, args }, 'Optional QMD collection removal skipped');
+        return;
+      }
+      throw err;
     }
+  }
+
+  private isMissingQmdCollectionError(err: unknown): boolean {
+    const message = err instanceof Error ? err.message.toLowerCase() : String(err).toLowerCase();
+    return (
+      message.includes('collection not found') ||
+      message.includes('no such collection') ||
+      message.includes('unknown collection')
+    );
   }
 
   private parseTimeout(value: string | undefined, fallback: number): number {
@@ -257,7 +276,6 @@ class SearchService {
         collection,
         snippet: snippet.slice(0, 500),
         score,
-        metadata: item,
       };
     });
   }

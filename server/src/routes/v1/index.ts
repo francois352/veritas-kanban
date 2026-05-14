@@ -84,14 +84,18 @@ import { feedbackRoutes } from '../feedback.js';
 import promptRegistryRoutes from '../prompt-registry.js';
 
 const v1Router: IRouter = Router();
-const READ_RATE_POST_ROUTES = new Set(['/search', '/api/search', '/api/v1/search']);
+
+function isSearchQueryPath(pathname: string): boolean {
+  const normalized = pathname.replace(/\/+$/, '') || '/';
+  return normalized === '/search' || /(?:^|\/)api(?:\/v\d+)?\/search$/.test(normalized);
+}
 
 function isReadRateLimitedRequest(req: Request): boolean {
   if (req.method === 'GET' || req.method === 'HEAD') return true;
   if (req.method !== 'POST') return false;
 
-  const pathname = (req.originalUrl || req.url || req.path).split('?')[0]?.replace(/\/+$/, '');
-  return READ_RATE_POST_ROUTES.has(pathname || '/');
+  const pathname = (req.originalUrl || req.url || req.path).split('?')[0] ?? '';
+  return isSearchQueryPath(pathname);
 }
 
 // ── Tiered rate limiting by HTTP method ──────────────────────

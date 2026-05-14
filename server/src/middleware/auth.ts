@@ -44,6 +44,11 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
+function isSearchQueryPath(pathname: string): boolean {
+  const normalized = pathname.replace(/\/+$/, '') || '/';
+  return normalized === '/search' || /(?:^|\/)api(?:\/v\d+)?\/search$/.test(normalized);
+}
+
 // === Configuration ===
 
 // Load auth config from environment variables
@@ -386,9 +391,8 @@ export function authorizeWrite(req: AuthenticatedRequest, res: Response, next: N
     return next();
   }
 
-  const pathname = (req.originalUrl || req.url || '').split('?')[0]?.replace(/\/+$/, '');
-  const readOnlyPostRoutes = new Set(['/api/search', '/api/v1/search']);
-  if (req.auth.role === 'read-only' && req.method === 'POST' && readOnlyPostRoutes.has(pathname)) {
+  const pathname = (req.originalUrl || req.url || '').split('?')[0] ?? '';
+  if (req.auth.role === 'read-only' && req.method === 'POST' && isSearchQueryPath(pathname)) {
     return next();
   }
 

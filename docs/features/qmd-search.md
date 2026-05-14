@@ -26,6 +26,8 @@ Default backend is `keyword`. Enable QMD globally with:
 VERITAS_SEARCH_BACKEND=qmd
 ```
 
+Read-only API keys can call `POST /api/search`, but their requests are served with the keyword backend even if they ask for `auto` or `qmd`. Agent and admin keys can request QMD-backed search.
+
 ## Setup
 
 Install QMD and create the initial collections:
@@ -64,7 +66,7 @@ curl -X POST http://localhost:3001/api/search \
   }'
 ```
 
-The response includes `backend`, `degraded`, and optional `reason` fields so clients can show whether QMD or fallback search served the request.
+The response includes `backend`, `degraded`, and optional `reason` fields so clients can show whether QMD or fallback search served the request. Search results expose title, path, collection, snippet, and score; raw QMD metadata is not returned.
 
 ## App UI
 
