@@ -56,7 +56,7 @@ export interface StaleTaskWatchdogOptions {
 }
 
 interface WatchdogDependencies {
-  taskService?: Pick<TaskService, 'listTasks' | 'updateTask'>;
+  taskService?: Pick<TaskService, 'getTask' | 'listTasks' | 'updateTask'>;
   agentRegistry?: Pick<ReturnType<typeof getAgentRegistryService>, 'list'>;
 }
 
@@ -102,7 +102,7 @@ function slugRef(value: string | undefined): string {
 }
 
 export class StaleTaskWatchdogService {
-  private readonly taskService: Pick<TaskService, 'listTasks' | 'updateTask'>;
+  private readonly taskService: Pick<TaskService, 'getTask' | 'listTasks' | 'updateTask'>;
   private readonly agentRegistry: Pick<ReturnType<typeof getAgentRegistryService>, 'list'>;
   private interval: ReturnType<typeof setInterval> | null = null;
 
@@ -179,7 +179,11 @@ export class StaleTaskWatchdogService {
       )
       .filter((finding): finding is StaleTaskFinding => finding !== null)
       .sort((a, b) => {
-        const severityOrder = a.severity.localeCompare(b.severity);
+        const severityWeight: Record<StaleTaskSeverity, number> = {
+          stale: 0,
+          'checkpoint-overdue': 1,
+        };
+        const severityOrder = severityWeight[a.severity] - severityWeight[b.severity];
         if (severityOrder !== 0) return severityOrder;
         return (b.taskAgeMinutes ?? 0) - (a.taskAgeMinutes ?? 0);
       });
@@ -294,13 +298,6 @@ export class StaleTaskWatchdogService {
       }
     }
 
-    const mismatchOnly =
-      reasons.length === 1 &&
-      reasons[0].startsWith('agent registry points at ') &&
-      taskAgeMinutes !== null &&
-      taskAgeMinutes <= 5;
-    if (mismatchOnly) return null;
-
     const checkpointOverdue =
       taskAgeMinutes === null || taskAgeMinutes > taskThresholdMinutes;
     if (checkpointOverdue) {
@@ -346,8 +343,7 @@ export class StaleTaskWatchdogService {
     nowMs: number,
     throttleMinutes: number
   ): Promise<boolean> {
-    const tasks = await this.taskService.listTasks();
-    const task = tasks.find((candidate) => candidate.id === finding.id);
+    const task = await this.taskService.getTask(finding.id);
     if (!task) return false;
 
     if (this.hasRecentWatchdogComment(task.comments ?? [], nowMs, throttleMinutes)) {
@@ -377,7 +373,7 @@ export class StaleTaskWatchdogService {
   ): boolean {
     const throttleMs = throttleMinutes * 60_000;
     return comments.some((comment) => {
-      if (comment.author !== WATCHDOG_AUTHOR && !comment.text.startsWith(STALE_COMMENT_PREFIX)) {
+      if (comment.author !== WATCHDOG_AUTHOR || !comment.text.startsWith(STALE_COMMENT_PREFIX)) {
         return false;
       }
       const timestamp = parseIso(comment.timestamp);

@@ -128,6 +128,7 @@ const STALE_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
 
 /** Prevent rapid busy<->idle oscillation on quick status churn */
 const DEFAULT_TASK_SYNC_FLAP_GUARD_MS = 10 * 1000; // 10 seconds
+const MAX_RECONCILE_FUTURE_SKEW_MS = 5 * 60 * 1000; // 5 minutes
 
 function getTaskSyncFlapGuardMs(): number {
   const raw = process.env.VERITAS_TASK_SYNC_FLAP_GUARD_MS;
@@ -326,6 +327,8 @@ class AgentRegistryService {
     }
 
     let changed = 0;
+    let directRegistryChanged = false;
+    const snapshotHasTasks = tasks.length > 0;
 
     for (const agent of this.agents.values()) {
       const mapped =
@@ -352,13 +355,13 @@ class AgentRegistryService {
 
       if (agent.status === 'busy' && agent.currentTaskId) {
         const task = tasks.find((t) => t.id === agent.currentTaskId);
-        if (!task) {
+        if (!task && snapshotHasTasks) {
           agent.status = 'idle';
           agent.currentTaskId = undefined;
           agent.currentTaskTitle = undefined;
           this.agents.set(agent.id, agent);
-          this.persist();
           changed++;
+          directRegistryChanged = true;
           continue;
         }
 
@@ -378,6 +381,10 @@ class AgentRegistryService {
           }
         }
       }
+    }
+
+    if (directRegistryChanged) {
+      this.persist();
     }
 
     return changed;
@@ -482,7 +489,9 @@ class AgentRegistryService {
   private getTaskUpdatedMillis(task: TaskSyncSnapshot): number {
     if (!task.updated) return 0;
     const parsed = new Date(task.updated).getTime();
-    return Number.isFinite(parsed) ? parsed : 0;
+    if (!Number.isFinite(parsed)) return 0;
+    if (parsed > Date.now() + MAX_RECONCILE_FUTURE_SKEW_MS) return 0;
+    return parsed;
   }
 
   private isValidAgentRef(agentRef: string): boolean {

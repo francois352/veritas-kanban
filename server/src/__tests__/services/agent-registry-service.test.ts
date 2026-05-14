@@ -620,6 +620,40 @@ describe('AgentRegistryService', () => {
       expect(agent?.currentTaskTitle).toBe('Newer in-progress task');
     });
 
+    it('should ignore future-dated task updates when choosing the active task', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-28T12:45:00.000Z'));
+
+      const changed = service.reconcileFromTasks(
+        [
+          {
+            id: 'task_20260228_current',
+            title: 'Current in-progress task',
+            status: 'in-progress',
+            agent: 'coder-1',
+            updated: '2026-02-28T12:30:00.000Z',
+          },
+          {
+            id: 'task_20260228_future',
+            title: 'Future-dated in-progress task',
+            status: 'in-progress',
+            agent: 'coder-1',
+            updated: '2099-01-01T00:00:00.000Z',
+          },
+        ],
+        TASK_RECONCILE_CONTEXT
+      );
+
+      const agent = service.get('coder-1');
+      expect(changed).toBe(1);
+      expect(agent?.currentTaskId).toBe('task_20260228_current');
+
+      vi.useRealTimers();
+    });
+
     it('should clear busy agent when assigned task is terminal', () => {
       const service = getAgentRegistryService();
       service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
@@ -669,13 +703,43 @@ describe('AgentRegistryService', () => {
         TASK_SYNC_CONTEXT
       );
 
-      const changed = service.reconcileFromTasks([], TASK_RECONCILE_CONTEXT);
+      const changed = service.reconcileFromTasks(
+        [
+          {
+            id: 'task_20260228_other',
+            status: 'todo',
+            agent: 'other-agent',
+          },
+        ],
+        TASK_RECONCILE_CONTEXT
+      );
 
       const agent = service.get('coder-1');
       expect(changed).toBe(1);
       expect(agent?.status).toBe('idle');
       expect(agent?.currentTaskId).toBeUndefined();
       expect(agent?.currentTaskTitle).toBeUndefined();
+    });
+
+    it('should not clear busy agent when reconciliation receives an empty snapshot', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      service.syncFromTask(
+        {
+          agentRef: 'coder-1',
+          taskId: 'task_20260228_current',
+          taskStatus: 'in-progress',
+        },
+        TASK_SYNC_CONTEXT
+      );
+
+      const changed = service.reconcileFromTasks([], TASK_RECONCILE_CONTEXT);
+
+      const agent = service.get('coder-1');
+      expect(changed).toBe(0);
+      expect(agent?.status).toBe('busy');
+      expect(agent?.currentTaskId).toBe('task_20260228_current');
     });
 
     it('should reject unauthorized reconcile context', () => {

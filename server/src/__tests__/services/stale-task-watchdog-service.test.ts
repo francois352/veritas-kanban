@@ -41,6 +41,7 @@ function makeAgent(overrides: Partial<RegisteredAgent> = {}): RegisteredAgent {
 function makeService(tasks: Task[], agents: RegisteredAgent[]) {
   const taskService = {
     listTasks: vi.fn(async () => tasks),
+    getTask: vi.fn(async (id: string) => tasks.find((task) => task.id === id) ?? null),
     updateTask: vi.fn(async (id: string, input: Partial<Task>) => {
       const index = tasks.findIndex((task) => task.id === id);
       if (index === -1) return null;
@@ -159,5 +160,51 @@ describe('StaleTaskWatchdogService', () => {
     expect(tasks[0].comments).toHaveLength(1);
     expect(tasks[0].comments?.[0].author).toBe('veritas-watchdog');
     expect(tasks[0].comments?.[0].text).toContain('STALE CHECK:');
+  });
+
+  it('prioritizes stale liveness failures before checkpoint-only findings', async () => {
+    const { service } = makeService(
+      [
+        makeTask({
+          id: 'task_20260515_checkpoint',
+          title: 'Checkpoint overdue only',
+          updated: '2026-05-15T00:00:00.000Z',
+          agent: 'checkpoint-agent',
+        }),
+        makeTask({
+          id: 'task_20260515_stale',
+          title: 'Offline worker',
+          updated: '2026-05-15T00:20:00.000Z',
+          agent: 'stale-agent',
+        }),
+      ],
+      [
+        makeAgent({
+          id: 'checkpoint-agent',
+          name: 'Checkpoint Agent',
+          currentTaskId: 'task_20260515_checkpoint',
+        }),
+        makeAgent({
+          id: 'stale-agent',
+          name: 'Stale Agent',
+          status: 'offline',
+          lastHeartbeat: '2026-05-15T00:10:00.000Z',
+          currentTaskId: 'task_20260515_stale',
+        }),
+      ]
+    );
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-15T00:45:00.000Z'));
+    const report = await service.report({
+      taskThresholdMinutes: 30,
+      heartbeatThresholdMinutes: 10,
+    });
+    vi.useRealTimers();
+
+    expect(report.findings.map((finding) => finding.id)).toEqual([
+      'task_20260515_stale',
+      'task_20260515_checkpoint',
+    ]);
   });
 });
