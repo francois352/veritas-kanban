@@ -65,6 +65,24 @@ describe('SearchService', () => {
     expect(result.results[0].path).toContain('docs/qmd.md');
   });
 
+  it('notes when minScore is ignored by keyword fallback', async () => {
+    process.env.VERITAS_SEARCH_BACKEND = 'qmd';
+    execFileMock.mockImplementation((_bin, _args, _options, callback) => {
+      callback(new Error('qmd not found'), '', '');
+    });
+    await fs.writeFile(path.join(root, 'docs', 'qmd.md'), '# QMD\n\nlocal retrieval', 'utf-8');
+
+    const result = await new SearchService().search({
+      query: 'retrieval',
+      limit: 5,
+      minScore: 0.5,
+    });
+
+    expect(result.backend).toBe('keyword');
+    expect(result.degraded).toBe(true);
+    expect(result.reason).toContain('minScore ignored by keyword fallback');
+  });
+
   it('normalizes qmd json results', async () => {
     process.env.VERITAS_SEARCH_BACKEND = 'qmd';
     execFileMock.mockImplementation((_bin, _args, _options, callback) => {
@@ -94,6 +112,46 @@ describe('SearchService', () => {
       score: 0.92,
       collection: 'tasks-active',
     });
+    expect(execFileMock).toHaveBeenCalledWith(
+      'qmd',
+      [
+        'query',
+        '--json',
+        '-n',
+        '10',
+        '--collections',
+        'tasks-active,tasks-archive,docs',
+        '--',
+        'semantic search',
+      ],
+      expect.objectContaining({ timeout: 10_000 }),
+      expect.any(Function)
+    );
+  });
+
+  it('places flag-like qmd queries after an option separator', async () => {
+    process.env.VERITAS_SEARCH_BACKEND = 'qmd';
+    execFileMock.mockImplementation((_bin, _args, _options, callback) => {
+      callback(null, JSON.stringify({ results: [] }), '');
+    });
+
+    await new SearchService().search({ query: '--help', limit: 5 });
+
+    expect(execFileMock).toHaveBeenCalledWith(
+      'qmd',
+      [
+        'query',
+        '--json',
+        '-n',
+        '5',
+        '--collections',
+        'tasks-active,tasks-archive,docs',
+        '--',
+        '--help',
+      ],
+      expect.any(Object),
+      expect.any(Function)
+    );
   });
 
   it('refreshes qmd index and embeddings', async () => {
@@ -113,14 +171,40 @@ describe('SearchService', () => {
       1,
       'qmd',
       ['update'],
-      expect.objectContaining({ cwd: root }),
+      expect.objectContaining({ cwd: root, timeout: 60_000 }),
       expect.any(Function)
     );
     expect(execFileMock).toHaveBeenNthCalledWith(
       2,
       'qmd',
       ['embed'],
-      expect.objectContaining({ cwd: root }),
+      expect.objectContaining({ cwd: root, timeout: 60_000 }),
+      expect.any(Function)
+    );
+  });
+
+  it('falls back to default qmd timeouts when env values are invalid', async () => {
+    process.env.VERITAS_SEARCH_BACKEND = 'qmd';
+    process.env.VERITAS_QMD_TIMEOUT_MS = '10s';
+    process.env.VERITAS_QMD_REFRESH_TIMEOUT_MS = '60 000';
+    execFileMock.mockImplementation((_bin, _args, _options, callback) => {
+      callback(null, JSON.stringify({ results: [] }), '');
+    });
+
+    await new SearchService().search({ query: 'semantic search' });
+    expect(execFileMock).toHaveBeenLastCalledWith(
+      'qmd',
+      expect.any(Array),
+      expect.objectContaining({ timeout: 10_000 }),
+      expect.any(Function)
+    );
+
+    execFileMock.mockClear();
+    await new SearchService().refreshIndex({ embed: false });
+    expect(execFileMock).toHaveBeenCalledWith(
+      'qmd',
+      ['update'],
+      expect.objectContaining({ timeout: 60_000 }),
       expect.any(Function)
     );
   });

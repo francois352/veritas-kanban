@@ -51,6 +51,8 @@ interface SearchSource {
 const PROJECT_ROOT = path.resolve(process.cwd(), '..');
 const DEFAULT_COLLECTIONS: SearchCollection[] = ['tasks-active', 'tasks-archive', 'docs'];
 const MAX_LIMIT = 50;
+const DEFAULT_QMD_TIMEOUT_MS = 10_000;
+const DEFAULT_QMD_REFRESH_TIMEOUT_MS = 60_000;
 
 class SearchService {
   async search(request: SearchRequest): Promise<SearchResponse> {
@@ -91,11 +93,15 @@ class SearchService {
           limit,
           collections: request.collections,
         });
+        const fallbackReason =
+          request.minScore !== undefined
+            ? `${reason}; minScore ignored by keyword fallback`
+            : reason;
         return {
           query,
           backend: 'keyword',
           degraded: true,
-          reason,
+          reason: fallbackReason,
           elapsedMs: Date.now() - started,
           results,
         };
@@ -122,14 +128,17 @@ class SearchService {
 
     await this.runQmdCommand(
       ['update'],
-      Number(process.env.VERITAS_QMD_REFRESH_TIMEOUT_MS || 60_000)
+      this.parseTimeout(process.env.VERITAS_QMD_REFRESH_TIMEOUT_MS, DEFAULT_QMD_REFRESH_TIMEOUT_MS)
     );
 
     if (embed) {
       commands.push('embed');
       await this.runQmdCommand(
         ['embed'],
-        Number(process.env.VERITAS_QMD_REFRESH_TIMEOUT_MS || 60_000)
+        this.parseTimeout(
+          process.env.VERITAS_QMD_REFRESH_TIMEOUT_MS,
+          DEFAULT_QMD_REFRESH_TIMEOUT_MS
+        )
       );
     }
 
@@ -154,7 +163,7 @@ class SearchService {
     query: string,
     options: { limit: number; collections: SearchCollection[]; minScore?: number }
   ): Promise<SearchResult[]> {
-    const args = ['query', query, '--json', '-n', String(options.limit)];
+    const args = ['query', '--json', '-n', String(options.limit)];
 
     if (options.minScore !== undefined) {
       args.push('--min-score', String(options.minScore));
@@ -164,9 +173,11 @@ class SearchService {
       args.push('--collections', options.collections.join(','));
     }
 
+    args.push('--', query);
+
     const stdout = await this.runQmdCommand(
       args,
-      Number(process.env.VERITAS_QMD_TIMEOUT_MS || 10_000)
+      this.parseTimeout(process.env.VERITAS_QMD_TIMEOUT_MS, DEFAULT_QMD_TIMEOUT_MS)
     );
 
     return this.normalizeQmdResults(stdout, options.limit);
@@ -192,6 +203,14 @@ class SearchService {
         }
       );
     });
+  }
+
+  private parseTimeout(value: string | undefined, fallback: number): number {
+    if (!value) return fallback;
+    const trimmed = value.trim();
+    if (!/^\d+$/.test(trimmed)) return fallback;
+    const parsed = Number.parseInt(trimmed, 10);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
   }
 
   private normalizeQmdResults(stdout: string, limit: number): SearchResult[] {

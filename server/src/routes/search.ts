@@ -8,17 +8,27 @@ import type { SearchBackend, SearchCollection } from '../services/search-service
 
 const router: RouterType = Router();
 
-const SearchBodySchema = z.object({
-  query: z.string().trim().min(1).max(500),
-  limit: z.number().int().min(1).max(50).optional(),
-  collections: z
-    .array(z.enum(['tasks-active', 'tasks-archive', 'docs']))
-    .min(1)
-    .max(3)
-    .optional(),
-  backend: z.enum(['auto', 'qmd', 'keyword']).optional(),
-  minScore: z.number().min(0).max(1).optional(),
-});
+const SearchBodySchema = z
+  .object({
+    query: z.string().trim().min(1).max(500),
+    limit: z.number().int().min(1).max(50).optional(),
+    collections: z
+      .array(z.enum(['tasks-active', 'tasks-archive', 'docs']))
+      .min(1)
+      .max(3)
+      .optional(),
+    backend: z.enum(['auto', 'qmd', 'keyword']).optional(),
+    minScore: z.number().min(0).max(1).optional(),
+  })
+  .superRefine((body, ctx) => {
+    if (body.minScore !== undefined && body.backend !== 'qmd' && body.backend !== 'auto') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['minScore'],
+        message: 'minScore requires backend "qmd" or "auto"',
+      });
+    }
+  });
 
 const RefreshBodySchema = z
   .object({

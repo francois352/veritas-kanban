@@ -54,6 +54,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
   const [duplicateResults, setDuplicateResults] = useState<SearchResult[]>([]);
   const [duplicateError, setDuplicateError] = useState<string | null>(null);
   const [isCheckingDuplicates, setIsCheckingDuplicates] = useState(false);
+  const [hasCheckedDuplicates, setHasCheckedDuplicates] = useState(false);
   // Consolidated form state via useReducer
   const {
     state: formState,
@@ -145,11 +146,13 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
       setDuplicateResults([]);
       setDuplicateError(null);
       setIsCheckingDuplicates(false);
+      setHasCheckedDuplicates(false);
       return;
     }
 
     let cancelled = false;
     setIsCheckingDuplicates(true);
+    setHasCheckedDuplicates(false);
     const timer = window.setTimeout(async () => {
       try {
         const response = await api.search.query({
@@ -162,10 +165,12 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
         if (cancelled) return;
         setDuplicateResults(response.results.slice(0, 3));
         setDuplicateError(response.degraded ? response.reason || null : null);
+        setHasCheckedDuplicates(true);
       } catch (err) {
         if (cancelled) return;
         setDuplicateResults([]);
         setDuplicateError(err instanceof Error ? err.message : 'Duplicate check failed');
+        setHasCheckedDuplicates(true);
       } finally {
         if (!cancelled) setIsCheckingDuplicates(false);
       }
@@ -329,7 +334,10 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                   />
                 </div>
 
-                {(isCheckingDuplicates || duplicateResults.length > 0 || duplicateError) && (
+                {(isCheckingDuplicates ||
+                  duplicateResults.length > 0 ||
+                  duplicateError ||
+                  hasCheckedDuplicates) && (
                   <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
                     <div className="flex items-center justify-between gap-3">
                       <div className="flex items-center gap-2 text-sm font-medium">
@@ -383,7 +391,9 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
                         })}
                       </div>
                     ) : (
-                      !isCheckingDuplicates && (
+                      hasCheckedDuplicates &&
+                      !isCheckingDuplicates &&
+                      !duplicateError && (
                         <p className="mt-2 text-sm text-muted-foreground">
                           No likely task duplicates found.
                         </p>

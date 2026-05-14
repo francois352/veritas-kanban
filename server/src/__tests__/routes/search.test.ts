@@ -70,6 +70,15 @@ describe('searchRoutes', () => {
     expect(mockSearch).not.toHaveBeenCalled();
   });
 
+  it('POST /api/search rejects minScore without qmd-capable backend', async () => {
+    const res = await request(app)
+      .post('/api/search')
+      .send({ query: 'qmd', backend: 'keyword', minScore: 0.5 });
+
+    expect(res.status).toBe(400);
+    expect(mockSearch).not.toHaveBeenCalled();
+  });
+
   it('POST /api/search/index/refresh refreshes the qmd index', async () => {
     mockRefreshIndex.mockResolvedValue({
       backend: 'qmd',

@@ -9,6 +9,7 @@ if ! command -v "$QMD_BIN" >/dev/null 2>&1; then
   exit 1
 fi
 
+cd "$ROOT_DIR"
 "$QMD_BIN" collection add "$ROOT_DIR/tasks/active" --name tasks-active
 "$QMD_BIN" collection add "$ROOT_DIR/tasks/archive" --name tasks-archive
 "$QMD_BIN" collection add "$ROOT_DIR/docs" --name docs

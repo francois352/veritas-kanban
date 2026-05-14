@@ -386,6 +386,12 @@ export function authorizeWrite(req: AuthenticatedRequest, res: Response, next: N
     return next();
   }
 
+  const pathname = (req.originalUrl || req.url || '').split('?')[0]?.replace(/\/+$/, '');
+  const readOnlyPostRoutes = new Set(['/api/search', '/api/v1/search']);
+  if (req.auth.role === 'read-only' && req.method === 'POST' && readOnlyPostRoutes.has(pathname)) {
+    return next();
+  }
+
   res.status(403).json({
     code: 'WRITE_FORBIDDEN',
     message: 'Write access denied',

@@ -132,6 +132,20 @@ describe('CreateTaskDialog duplicate detection', () => {
       collections: ['tasks-active', 'tasks-archive'],
       limit: 5,
     });
+    expect(await screen.findByText('No likely task duplicates found.')).toBeDefined();
+  });
+
+  it('shows duplicate check failures without a contradictory no-duplicates message', async () => {
+    queryMock.mockRejectedValue(new Error('Search failed'));
+
+    render(<CreateTaskDialog open onOpenChange={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('Title'), {
+      target: { value: 'Search duplicate' },
+    });
+
+    expect(await screen.findByText('Search failed')).toBeDefined();
+    expect(screen.queryByText('No likely task duplicates found.')).toBeNull();
   });
 
   it('opens a duplicate result for inspection', async () => {
