@@ -694,10 +694,50 @@ describe('AgentRegistryService', () => {
       const service = getAgentRegistryService();
       service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
 
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-28T12:00:00.000Z'));
+
       service.syncFromTask(
         {
           agentRef: 'coder-1',
           taskId: 'task_20260228_archived',
+          taskStatus: 'in-progress',
+        },
+        TASK_SYNC_CONTEXT
+      );
+
+      vi.setSystemTime(new Date('2026-02-28T12:00:15.000Z'));
+      const changed = service.reconcileFromTasks(
+        [
+          {
+            id: 'task_20260228_other',
+            status: 'todo',
+            agent: 'other-agent',
+          },
+        ],
+        TASK_RECONCILE_CONTEXT
+      );
+
+      const agent = service.get('coder-1');
+      expect(changed).toBe(1);
+      expect(agent?.status).toBe('idle');
+      expect(agent?.currentTaskId).toBeUndefined();
+      expect(agent?.currentTaskTitle).toBeUndefined();
+
+      vi.useRealTimers();
+    });
+
+    it('should not clear busy agent when current task is missing inside the flap guard', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-28T12:00:00.000Z'));
+
+      service.syncFromTask(
+        {
+          agentRef: 'coder-1',
+          taskId: 'task_20260228_new',
           taskStatus: 'in-progress',
         },
         TASK_SYNC_CONTEXT
@@ -715,10 +755,11 @@ describe('AgentRegistryService', () => {
       );
 
       const agent = service.get('coder-1');
-      expect(changed).toBe(1);
-      expect(agent?.status).toBe('idle');
-      expect(agent?.currentTaskId).toBeUndefined();
-      expect(agent?.currentTaskTitle).toBeUndefined();
+      expect(changed).toBe(0);
+      expect(agent?.status).toBe('busy');
+      expect(agent?.currentTaskId).toBe('task_20260228_new');
+
+      vi.useRealTimers();
     });
 
     it('should not clear busy agent when reconciliation receives an empty snapshot', () => {

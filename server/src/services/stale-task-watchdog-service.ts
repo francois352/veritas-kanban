@@ -104,6 +104,7 @@ function slugRef(value: string | undefined): string {
 export class StaleTaskWatchdogService {
   private readonly taskService: Pick<TaskService, 'getTask' | 'listTasks' | 'updateTask'>;
   private readonly agentRegistry: Pick<ReturnType<typeof getAgentRegistryService>, 'list'>;
+  private readonly commentThrottleByTask = new Map<string, number>();
   private interval: ReturnType<typeof setInterval> | null = null;
 
   constructor(deps: WatchdogDependencies = {}) {
@@ -172,10 +173,18 @@ export class StaleTaskWatchdogService {
     ]);
 
     const agentsByRef = this.indexAgents(agents);
+    const tasksById = new Map(tasks.map((task) => [task.id, task]));
     const findings = tasks
       .filter((task) => task.status === 'in-progress')
       .map((task) =>
-        this.assessTask(task, agentsByRef, nowMs, taskThresholdMinutes, heartbeatThresholdMinutes)
+        this.assessTask(
+          task,
+          agentsByRef,
+          tasksById,
+          nowMs,
+          taskThresholdMinutes,
+          heartbeatThresholdMinutes
+        )
       )
       .filter((finding): finding is StaleTaskFinding => finding !== null)
       .sort((a, b) => {
@@ -251,6 +260,7 @@ export class StaleTaskWatchdogService {
   private assessTask(
     task: Task,
     agentsByRef: Map<string, RegisteredAgent>,
+    tasksById: Map<string, Task>,
     nowMs: number,
     taskThresholdMinutes: number,
     heartbeatThresholdMinutes: number
@@ -264,6 +274,7 @@ export class StaleTaskWatchdogService {
     let agentStatus = 'missing';
     let heartbeatAgeMinutes: number | null = null;
     let currentTaskId: string | undefined;
+    let activeElsewhere = false;
 
     if (!agent) {
       reasons.push('assigned agent is not registered');
@@ -290,8 +301,13 @@ export class StaleTaskWatchdogService {
       }
 
       if (currentTaskId && currentTaskId !== task.id) {
-        reasons.push(`agent registry points at ${currentTaskId}, not this task`);
-        livenessFailed = true;
+        const registryTask = tasksById.get(currentTaskId);
+        if (registryTask?.status === 'in-progress') {
+          activeElsewhere = true;
+        } else {
+          reasons.push(`agent registry points at ${currentTaskId}, not this task`);
+          livenessFailed = true;
+        }
       } else if (agent.status === 'busy' && !currentTaskId) {
         reasons.push('agent is busy but has no currentTaskId');
         livenessFailed = true;
@@ -301,6 +317,9 @@ export class StaleTaskWatchdogService {
     const checkpointOverdue =
       taskAgeMinutes === null || taskAgeMinutes > taskThresholdMinutes;
     if (checkpointOverdue) {
+      if (activeElsewhere && currentTaskId) {
+        reasons.push(`agent is busy on another active task (${currentTaskId})`);
+      }
       reasons.push(`task has no update/checkpoint within ${taskThresholdMinutes}m`);
     }
 
@@ -346,7 +365,12 @@ export class StaleTaskWatchdogService {
     const task = await this.taskService.getTask(finding.id);
     if (!task) return false;
 
+    if (this.hasRecentInMemoryWatchdogComment(task.id, nowMs, throttleMinutes)) {
+      return false;
+    }
+
     if (this.hasRecentWatchdogComment(task.comments ?? [], nowMs, throttleMinutes)) {
+      this.commentThrottleByTask.set(task.id, nowMs);
       return false;
     }
 
@@ -360,10 +384,29 @@ export class StaleTaskWatchdogService {
     const updated = await this.taskService.updateTask(task.id, {
       comments: [...(task.comments ?? []), comment],
     });
-    if (!updated) return false;
+    if (!updated) {
+      log.warn({ taskId: task.id }, 'Stale task watchdog failed to persist comment');
+      return false;
+    }
 
+    this.commentThrottleByTask.set(task.id, nowMs);
     broadcastTaskChange('updated', task.id);
     return true;
+  }
+
+  private hasRecentInMemoryWatchdogComment(
+    taskId: string,
+    nowMs: number,
+    throttleMinutes: number
+  ): boolean {
+    const lastPostedAt = this.commentThrottleByTask.get(taskId);
+    if (lastPostedAt === undefined) return false;
+
+    const throttleMs = throttleMinutes * 60_000;
+    if (nowMs - lastPostedAt < throttleMs) return true;
+
+    this.commentThrottleByTask.delete(taskId);
+    return false;
   }
 
   private hasRecentWatchdogComment(

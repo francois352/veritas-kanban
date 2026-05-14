@@ -162,6 +162,89 @@ describe('StaleTaskWatchdogService', () => {
     expect(tasks[0].comments?.[0].text).toContain('STALE CHECK:');
   });
 
+  it('keeps an in-memory throttle when persisted comments are normalized', async () => {
+    const tasks = [
+      makeTask({
+        updated: '2026-05-15T00:00:00.000Z',
+        comments: [],
+      }),
+    ];
+    const { service, taskService } = makeService(
+      tasks,
+      [
+        makeAgent({
+          status: 'offline',
+          lastHeartbeat: '2026-05-15T00:10:00.000Z',
+        }),
+      ]
+    );
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-15T00:45:00.000Z'));
+    const first = await service.run({
+      postComments: true,
+      taskThresholdMinutes: 30,
+      heartbeatThresholdMinutes: 10,
+      commentThrottleMinutes: 30,
+    });
+
+    tasks[0].comments = [];
+
+    vi.setSystemTime(new Date('2026-05-15T00:50:00.000Z'));
+    const second = await service.run({
+      postComments: true,
+      taskThresholdMinutes: 30,
+      heartbeatThresholdMinutes: 10,
+      commentThrottleMinutes: 30,
+    });
+    vi.useRealTimers();
+
+    expect(first.commentsPosted).toBe(1);
+    expect(second.commentsPosted).toBe(0);
+    expect(taskService.updateTask).toHaveBeenCalledTimes(1);
+  });
+
+  it('treats older non-active tasks as checkpoint issues when the agent is busy elsewhere', async () => {
+    const { service } = makeService(
+      [
+        makeTask({
+          id: 'task_20260515_old',
+          title: 'Older task still assigned',
+          updated: '2026-05-15T00:00:00.000Z',
+          agent: 'codex',
+        }),
+        makeTask({
+          id: 'task_20260515_active',
+          title: 'Active task',
+          updated: '2026-05-15T00:40:00.000Z',
+          agent: 'codex',
+        }),
+      ],
+      [
+        makeAgent({
+          currentTaskId: 'task_20260515_active',
+        }),
+      ]
+    );
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-15T00:45:00.000Z'));
+    const report = await service.report({
+      taskThresholdMinutes: 30,
+      heartbeatThresholdMinutes: 10,
+    });
+    vi.useRealTimers();
+
+    expect(report.findings).toHaveLength(1);
+    expect(report.findings[0]).toMatchObject({
+      id: 'task_20260515_old',
+      severity: 'checkpoint-overdue',
+    });
+    expect(report.findings[0].reasons).toContain(
+      'agent is busy on another active task (task_20260515_active)'
+    );
+  });
+
   it('prioritizes stale liveness failures before checkpoint-only findings', async () => {
     const { service } = makeService(
       [

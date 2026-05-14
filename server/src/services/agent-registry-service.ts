@@ -128,7 +128,6 @@ const STALE_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
 
 /** Prevent rapid busy<->idle oscillation on quick status churn */
 const DEFAULT_TASK_SYNC_FLAP_GUARD_MS = 10 * 1000; // 10 seconds
-const MAX_RECONCILE_FUTURE_SKEW_MS = 5 * 60 * 1000; // 5 minutes
 
 function getTaskSyncFlapGuardMs(): number {
   const raw = process.env.VERITAS_TASK_SYNC_FLAP_GUARD_MS;
@@ -356,6 +355,11 @@ class AgentRegistryService {
       if (agent.status === 'busy' && agent.currentTaskId) {
         const task = tasks.find((t) => t.id === agent.currentTaskId);
         if (!task && snapshotHasTasks) {
+          const lastBusyAt = this.lastBusyAtByAgent.get(agent.id);
+          if (lastBusyAt && Date.now() - lastBusyAt < this.taskSyncFlapGuardMs) {
+            continue;
+          }
+
           agent.status = 'idle';
           agent.currentTaskId = undefined;
           agent.currentTaskTitle = undefined;
@@ -481,7 +485,7 @@ class AgentRegistryService {
     if (candidate.status === 'in-progress' && existing.status !== 'in-progress') return true;
     if (candidate.status !== 'in-progress' && existing.status === 'in-progress') return false;
     if (candidate.status === 'in-progress' && existing.status === 'in-progress') {
-      return this.getTaskUpdatedMillis(candidate) >= this.getTaskUpdatedMillis(existing);
+      return this.getTaskUpdatedMillis(candidate) > this.getTaskUpdatedMillis(existing);
     }
     return false;
   }
@@ -490,7 +494,7 @@ class AgentRegistryService {
     if (!task.updated) return 0;
     const parsed = new Date(task.updated).getTime();
     if (!Number.isFinite(parsed)) return 0;
-    if (parsed > Date.now() + MAX_RECONCILE_FUTURE_SKEW_MS) return 0;
+    if (parsed > Date.now()) return 0;
     return parsed;
   }
 
