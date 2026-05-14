@@ -14,8 +14,13 @@
  * @see docs/SECURITY_AUDIT_2026-01-28.md — MED-1
  */
 
-import sanitizeHtml from 'sanitize-html';
 import path from 'path';
+
+const NON_TEXT_TAG_RE =
+  /<\s*(script|style|textarea|option|noscript|xmp)\b[^>]*>[\s\S]*?<\s*\/\s*\1\s*>/gi;
+const UNTERMINATED_NON_TEXT_TAG_RE =
+  /<\s*(script|style|textarea|option|noscript|xmp)\b[^>]*>[\s\S]*$/gi;
+const HTML_TAG_RE = /<\/?[^>]+>/g;
 
 // ─── Path Traversal Prevention ─────────────────────────────────────────────────
 
@@ -67,14 +72,10 @@ export function ensureWithinBase(base: string, target: string): string {
  * - Event handlers are removed: `<img onerror=alert(1)>` → ``
  */
 export function stripHtml(input: string): string {
-  return sanitizeHtml(input, {
-    allowedTags: [],
-    allowedAttributes: {},
-    // 'discard' (default) strips disallowed tags.
-    // Content inside nonTextTags (script, style, textarea, option, noscript)
-    // is automatically discarded by sanitize-html.
-    disallowedTagsMode: 'discard',
-  });
+  return input
+    .replace(NON_TEXT_TAG_RE, '')
+    .replace(UNTERMINATED_NON_TEXT_TAG_RE, '')
+    .replace(HTML_TAG_RE, '');
 }
 
 /**
