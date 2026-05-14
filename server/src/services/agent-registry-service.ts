@@ -115,6 +115,7 @@ export interface TaskSyncSnapshot {
   title?: string;
   status: 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
   agent?: string;
+  updated?: string;
 }
 
 // ─── Configuration ───────────────────────────────────────────────
@@ -317,8 +318,9 @@ class AgentRegistryService {
       const key = task.agent.trim().toLowerCase();
       const existing = byAgentRef.get(key);
 
-      // Authoritative precedence: in-progress wins
-      if (!existing || task.status === 'in-progress') {
+      // Authoritative precedence: in-progress wins; when an agent has several
+      // in-progress tasks, use the most recently updated one as the active task.
+      if (!existing || this.shouldPreferTaskSyncCandidate(task, existing)) {
         byAgentRef.set(key, task);
       }
     }
@@ -350,6 +352,16 @@ class AgentRegistryService {
 
       if (agent.status === 'busy' && agent.currentTaskId) {
         const task = tasks.find((t) => t.id === agent.currentTaskId);
+        if (!task) {
+          agent.status = 'idle';
+          agent.currentTaskId = undefined;
+          agent.currentTaskTitle = undefined;
+          this.agents.set(agent.id, agent);
+          this.persist();
+          changed++;
+          continue;
+        }
+
         if (task && task.status !== 'in-progress') {
           const prevStatus = agent.status;
           const prevTaskId = agent.currentTaskId;
@@ -453,6 +465,24 @@ class AgentRegistryService {
     if (isValidSyncToken(context)) return true;
     // Reject: string-only contexts are no longer accepted
     return false;
+  }
+
+  private shouldPreferTaskSyncCandidate(
+    candidate: TaskSyncSnapshot,
+    existing: TaskSyncSnapshot
+  ): boolean {
+    if (candidate.status === 'in-progress' && existing.status !== 'in-progress') return true;
+    if (candidate.status !== 'in-progress' && existing.status === 'in-progress') return false;
+    if (candidate.status === 'in-progress' && existing.status === 'in-progress') {
+      return this.getTaskUpdatedMillis(candidate) >= this.getTaskUpdatedMillis(existing);
+    }
+    return false;
+  }
+
+  private getTaskUpdatedMillis(task: TaskSyncSnapshot): number {
+    if (!task.updated) return 0;
+    const parsed = new Date(task.updated).getTime();
+    return Number.isFinite(parsed) ? parsed : 0;
   }
 
   private isValidAgentRef(agentRef: string): boolean {

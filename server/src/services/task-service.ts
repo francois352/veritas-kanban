@@ -502,6 +502,7 @@ export class TaskService {
           title: task.title,
           status: task.status,
           agent: task.agent,
+          updated: task.updated,
         })),
         TASK_RECONCILE_CONTEXT
       );
