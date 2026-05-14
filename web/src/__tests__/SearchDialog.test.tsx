@@ -27,6 +27,9 @@ describe('SearchDialog', () => {
     expect(extractTaskId('tasks/active/task_20260504_abc123-build-search.md')).toBe(
       'task_20260504_abc123'
     );
+    expect(extractTaskId('tasks/active/task_20260504_a-xyz9-build-search.md')).toBe(
+      'task_20260504_a-xyz9'
+    );
     expect(extractTaskId('docs/features/qmd-search.md')).toBeNull();
   });
 

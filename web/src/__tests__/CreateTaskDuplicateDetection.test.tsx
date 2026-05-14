@@ -75,7 +75,7 @@ describe('CreateTaskDialog duplicate detection', () => {
       results: [
         {
           id: 'tasks/active/task_20260504_match-search-duplicate.md',
-          title: 'Existing Search Duplicate',
+          title: 'Search duplicate',
           path: 'tasks/active/task_20260504_match-search-duplicate.md',
           collection: 'tasks-active',
           snippet: 'Already covers duplicate detection.',
@@ -98,10 +98,40 @@ describe('CreateTaskDialog duplicate detection', () => {
       collections: ['tasks-active', 'tasks-archive'],
       limit: 5,
     });
-    expect(await screen.findByText('Existing Search Duplicate')).toBeDefined();
+    expect(await screen.findByText('Search duplicate')).toBeDefined();
     expect(
       (screen.getByRole('button', { name: /^create task$/i }) as HTMLButtonElement).disabled
     ).toBe(false);
+  });
+
+  it('uses title-only duplicate queries and ignores long description edits', async () => {
+    queryMock.mockResolvedValue({
+      query: 'Search duplicate',
+      backend: 'keyword',
+      degraded: false,
+      elapsedMs: 3,
+      results: [],
+    });
+
+    render(<CreateTaskDialog open onOpenChange={vi.fn()} />);
+
+    fireEvent.change(screen.getByLabelText('Title'), {
+      target: { value: 'Search duplicate' },
+    });
+
+    await waitFor(() => expect(queryMock).toHaveBeenCalledTimes(1));
+    fireEvent.change(screen.getByLabelText('Description'), {
+      target: { value: 'A'.repeat(600) },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 650));
+    expect(queryMock).toHaveBeenCalledTimes(1);
+    expect(queryMock).toHaveBeenLastCalledWith({
+      query: 'Search duplicate',
+      backend: 'auto',
+      collections: ['tasks-active', 'tasks-archive'],
+      limit: 5,
+    });
   });
 
   it('opens a duplicate result for inspection', async () => {

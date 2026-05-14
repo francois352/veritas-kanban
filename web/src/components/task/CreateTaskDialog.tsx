@@ -140,7 +140,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
   const isBlueprint = Boolean(currentTemplate?.blueprint && currentTemplate.blueprint.length > 0);
 
   useEffect(() => {
-    const query = [title, description].filter(Boolean).join(' ').trim();
+    const query = title.trim();
     if (!open || isBlueprint || title.trim().length < 4) {
       setDuplicateResults([]);
       setDuplicateError(null);
@@ -160,12 +160,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
         });
 
         if (cancelled) return;
-        const normalizedTitle = title.trim().toLowerCase();
-        setDuplicateResults(
-          response.results
-            .filter((result) => result.title.trim().toLowerCase() !== normalizedTitle)
-            .slice(0, 3)
-        );
+        setDuplicateResults(response.results.slice(0, 3));
         setDuplicateError(response.degraded ? response.reason || null : null);
       } catch (err) {
         if (cancelled) return;
@@ -180,7 +175,7 @@ export function CreateTaskDialog({ open, onOpenChange }: CreateTaskDialogProps) 
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [description, isBlueprint, open, title]);
+  }, [isBlueprint, open, title]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
