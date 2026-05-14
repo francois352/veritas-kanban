@@ -66,7 +66,10 @@ import { cspNonceMiddleware, cspNonceDirective } from './middleware/csp-nonce.js
 import { healthRouter, apiHealthRouter, setHealthWss } from './routes/health.js';
 import { getPrometheusCollector } from './services/metrics/prometheus.js';
 import { metricsCollector } from './middleware/metrics-collector.js';
-import { kanbanSignatureMiddleware } from './middleware/kanban-signature.js';
+import {
+  getKanbanSignatureDiagnostics,
+  kanbanSignatureMiddleware,
+} from './middleware/kanban-signature.js';
 
 const log = createLogger('server');
 
@@ -436,10 +439,10 @@ app.use(
 // Auth diagnostic endpoint (admin-only, requires authentication)
 // Available at both /api/auth/diagnostics and /api/v1/auth/diagnostics
 app.get('/api/auth/diagnostics', authenticate, authorize('admin'), (_req, res) => {
-  res.json(getAuthStatus());
+  res.json({ ...getAuthStatus(), ...getKanbanSignatureDiagnostics() });
 });
 app.get('/api/v1/auth/diagnostics', authenticate, authorize('admin'), (_req, res) => {
-  res.json(getAuthStatus());
+  res.json({ ...getAuthStatus(), ...getKanbanSignatureDiagnostics() });
 });
 
 // ============================================

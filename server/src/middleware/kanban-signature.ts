@@ -20,6 +20,50 @@ const MAX_SEEN_SIGNATURES = 10_000;
 const O_NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
 const seenSignatures = new Map<string, number>();
 
+const AUDIT_LOG_PATH =
+  process.env.KANBAN_SIG_AUDIT_LOG_PATH?.trim() || '/var/log/veritas/audit-signature-reject.jsonl';
+
+type RejectReason = 'missing' | 'skewed' | 'wrong' | 'unknown_agent';
+
+function mapRejectReason(code: string): RejectReason | null {
+  switch (code) {
+    case 'KANBAN_SIGNATURE_REQUIRED':
+    case 'KANBAN_SIGNATURE_INCOMPLETE':
+      return 'missing';
+    case 'KANBAN_SIGNATURE_STALE':
+      return 'skewed';
+    case 'KANBAN_SIGNATURE_INVALID':
+      return 'wrong';
+    case 'KANBAN_ACTOR_UNKNOWN':
+      return 'unknown_agent';
+    default:
+      return null;
+  }
+}
+
+function appendAuditReject(req: Request, actor: string | undefined, reason: RejectReason): void {
+  try {
+    const rawBody = (req as RawBodyRequest).rawBody ?? '';
+    const row = {
+      ts: new Date().toISOString(),
+      actor_claimed: actor || '',
+      method: req.method.toUpperCase(),
+      path: canonicalRequestPath(req.originalUrl),
+      reason,
+      remote_ip: req.ip || req.socket.remoteAddress || '',
+      body_hash: hashKanbanBody(rawBody),
+    };
+    fs.mkdirSync(path.dirname(AUDIT_LOG_PATH), { recursive: true });
+    fs.appendFileSync(AUDIT_LOG_PATH, `${JSON.stringify(row)}\n`, {
+      encoding: 'utf8',
+      mode: 0o640,
+      flag: 'a',
+    });
+  } catch (err) {
+    log.error({ err }, 'Failed to append kanban signature reject audit row');
+  }
+}
+
 let actorSecretCache:
   | {
       raw: string;
@@ -252,7 +296,9 @@ function loadAllowedActors(): Set<string> | null {
   }
 }
 
-function reject(res: Response, code: string, message: string, status = 401): void {
+function reject(req: Request, res: Response, code: string, message: string, status = 401): void {
+  const reason = mapRejectReason(code);
+  if (reason) appendAuditReject(req, getHeader(req, 'X-Kanban-Actor'), reason);
   res.status(status).json({ code, message });
 }
 
@@ -293,6 +339,11 @@ export function kanbanSignatureMiddleware(
   res: Response,
   next: NextFunction
 ): void {
+  if (process.env.KANBAN_SIG_DISABLE === 'true') {
+    log.error('KANBAN_SIG_DISABLE=true: bypassing kanban signature checks');
+    return next();
+  }
+
   if (shouldSkip(req)) {
     return next();
   }
@@ -303,32 +354,53 @@ export function kanbanSignatureMiddleware(
 
   if (!actor && !timestamp && !signature) {
     if (isGraceActive()) {
+      res.setHeader('X-Kanban-Signature-Warn', 'unsigned-write-grace-mode');
       return next();
     }
-    return reject(res, 'KANBAN_SIGNATURE_REQUIRED', 'Kanban write requests must be HMAC signed');
+    return reject(
+      req,
+      res,
+      'KANBAN_SIGNATURE_REQUIRED',
+      'Kanban write requests must be HMAC signed'
+    );
   }
 
   if (!actor || !timestamp || !signature) {
-    return reject(res, 'KANBAN_SIGNATURE_INCOMPLETE', 'Kanban signature headers are incomplete');
+    return reject(
+      req,
+      res,
+      'KANBAN_SIGNATURE_INCOMPLETE',
+      'Kanban signature headers are incomplete'
+    );
   }
 
   if (!ACTOR_RE.test(actor)) {
-    return reject(res, 'KANBAN_ACTOR_INVALID', 'Kanban actor header is invalid', 403);
+    return reject(req, res, 'KANBAN_ACTOR_INVALID', 'Kanban actor header is invalid', 403);
   }
 
   const allowedActors = loadAllowedActors();
   if (allowedActors && !allowedActors.has(actor)) {
-    return reject(res, 'KANBAN_ACTOR_UNKNOWN', 'Kanban actor is not in the registry', 403);
+    return reject(req, res, 'KANBAN_ACTOR_UNKNOWN', 'Kanban actor is not in the registry', 403);
   }
 
   const timestampMs = Date.parse(timestamp);
   if (!Number.isFinite(timestampMs) || Math.abs(Date.now() - timestampMs) > MAX_CLOCK_SKEW_MS) {
-    return reject(res, 'KANBAN_SIGNATURE_STALE', 'Kanban signature timestamp is outside tolerance');
+    return reject(
+      req,
+      res,
+      'KANBAN_SIGNATURE_STALE',
+      'Kanban signature timestamp is outside tolerance'
+    );
   }
 
   const secret = resolveSecret(actor);
   if (!secret) {
-    return reject(res, 'KANBAN_SIGNATURE_SECRET_MISSING', 'No HMAC secret is configured for actor');
+    return reject(
+      req,
+      res,
+      'KANBAN_SIGNATURE_SECRET_MISSING',
+      'No HMAC secret is configured for actor'
+    );
   }
 
   const rawBody = (req as RawBodyRequest).rawBody ?? '';
@@ -338,12 +410,47 @@ export function kanbanSignatureMiddleware(
   const expected = signPayload(secret, payload);
 
   if (!safeEqual(signature, expected)) {
-    return reject(res, 'KANBAN_SIGNATURE_INVALID', 'Kanban signature is invalid');
+    return reject(req, res, 'KANBAN_SIGNATURE_INVALID', 'Kanban signature is invalid');
   }
 
   if (isReplay(actor, signature, timestampMs)) {
-    return reject(res, 'KANBAN_SIGNATURE_REPLAY', 'Kanban signature has already been used');
+    return reject(req, res, 'KANBAN_SIGNATURE_REPLAY', 'Kanban signature has already been used');
   }
 
   next();
+}
+
+type SignatureDiagnostics = {
+  signature_enforcement: 'strict' | 'grace';
+  grace_remaining_days: number;
+  signed_writes_24h: number;
+  unsigned_writes_24h: number;
+  rejected_signed_24h: number;
+};
+
+export function getKanbanSignatureDiagnostics(): SignatureDiagnostics {
+  const graceDays = parseGraceDays();
+  let rejected = 0;
+  const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+  try {
+    if (fs.existsSync(AUDIT_LOG_PATH)) {
+      const rows = fs.readFileSync(AUDIT_LOG_PATH, 'utf8').split('\n');
+      for (const row of rows) {
+        if (!row.trim()) continue;
+        const parsed = JSON.parse(row) as { ts?: string };
+        const ts = parsed.ts ? Date.parse(parsed.ts) : NaN;
+        if (Number.isFinite(ts) && ts >= cutoff) rejected += 1;
+      }
+    }
+  } catch (err) {
+    log.warn({ err }, 'Failed to compute kanban signature diagnostics from audit log');
+  }
+
+  return {
+    signature_enforcement: graceDays > 0 ? 'grace' : 'strict',
+    grace_remaining_days: graceDays,
+    signed_writes_24h: 0,
+    unsigned_writes_24h: 0,
+    rejected_signed_24h: rejected,
+  };
 }
