@@ -128,6 +128,7 @@ const STALE_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
 
 /** Prevent rapid busy<->idle oscillation on quick status churn */
 const DEFAULT_TASK_SYNC_FLAP_GUARD_MS = 10 * 1000; // 10 seconds
+const MAX_RECONCILE_FUTURE_SKEW_MS = 30 * 1000; // 30 seconds
 
 function getTaskSyncFlapGuardMs(): number {
   const raw = process.env.VERITAS_TASK_SYNC_FLAP_GUARD_MS;
@@ -494,8 +495,9 @@ class AgentRegistryService {
     if (!task.updated) return 0;
     const parsed = new Date(task.updated).getTime();
     if (!Number.isFinite(parsed)) return 0;
-    if (parsed > Date.now()) return 0;
-    return parsed;
+    const nowMs = Date.now();
+    if (parsed > nowMs + MAX_RECONCILE_FUTURE_SKEW_MS) return 0;
+    return Math.min(parsed, nowMs);
   }
 
   private isValidAgentRef(agentRef: string): boolean {

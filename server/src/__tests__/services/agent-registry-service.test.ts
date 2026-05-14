@@ -654,6 +654,73 @@ describe('AgentRegistryService', () => {
       vi.useRealTimers();
     });
 
+    it('should allow small clock skew without letting future timestamps dominate', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-28T12:45:00.000Z'));
+
+      const changed = service.reconcileFromTasks(
+        [
+          {
+            id: 'task_20260228_old',
+            title: 'Older in-progress task',
+            status: 'in-progress',
+            agent: 'coder-1',
+            updated: '2026-02-28T12:44:00.000Z',
+          },
+          {
+            id: 'task_20260228_skew',
+            title: 'Slightly future in-progress task',
+            status: 'in-progress',
+            agent: 'coder-1',
+            updated: '2026-02-28T12:45:01.000Z',
+          },
+        ],
+        TASK_RECONCILE_CONTEXT
+      );
+
+      const agent = service.get('coder-1');
+      expect(changed).toBe(1);
+      expect(agent?.currentTaskId).toBe('task_20260228_skew');
+
+      vi.useRealTimers();
+    });
+
+    it('should keep the first active task when timestamps tie', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-28T12:45:00.000Z'));
+
+      service.reconcileFromTasks(
+        [
+          {
+            id: 'task_20260228_first',
+            title: 'First in-progress task',
+            status: 'in-progress',
+            agent: 'coder-1',
+            updated: '2026-02-28T12:44:00.000Z',
+          },
+          {
+            id: 'task_20260228_second',
+            title: 'Second in-progress task',
+            status: 'in-progress',
+            agent: 'coder-1',
+            updated: '2026-02-28T12:44:00.000Z',
+          },
+        ],
+        TASK_RECONCILE_CONTEXT
+      );
+
+      const agent = service.get('coder-1');
+      expect(agent?.currentTaskId).toBe('task_20260228_first');
+
+      vi.useRealTimers();
+    });
+
     it('should clear busy agent when assigned task is terminal', () => {
       const service = getAgentRegistryService();
       service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });

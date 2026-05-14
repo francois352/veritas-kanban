@@ -4,6 +4,7 @@ import path from 'path';
 import matter from 'gray-matter';
 import { nanoid } from 'nanoid';
 import type {
+  Comment,
   Task,
   CreateTaskInput,
   UpdateTaskInput,
@@ -926,6 +927,30 @@ export class TaskService {
           log.warn({ taskId: updatedTask.id }, 'Post-transition actions failed: %s', err);
         });
       }
+    });
+
+    return updatedTask;
+  }
+
+  async appendComment(id: string, comment: Comment): Promise<Task | null> {
+    const task = await this.getTask(id);
+    if (!task) return null;
+
+    const filepath = path.join(this.tasksDir, this.taskToFilename(task));
+    let updatedTask!: Task;
+
+    await withFileLock(filepath, async () => {
+      const freshTask = this.cacheGet(id) ?? task;
+      updatedTask = {
+        ...freshTask,
+        comments: [...(freshTask.comments ?? []), comment],
+        updated: new Date().toISOString(),
+      };
+
+      const content = this.taskToMarkdown(updatedTask);
+      this.markWrite();
+      await fs.writeFile(path.join(this.tasksDir, this.taskToFilename(freshTask)), content, 'utf-8');
+      this.cache.set(updatedTask.id, updatedTask);
     });
 
     return updatedTask;

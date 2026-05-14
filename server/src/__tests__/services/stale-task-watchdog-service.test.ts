@@ -42,10 +42,14 @@ function makeService(tasks: Task[], agents: RegisteredAgent[]) {
   const taskService = {
     listTasks: vi.fn(async () => tasks),
     getTask: vi.fn(async (id: string) => tasks.find((task) => task.id === id) ?? null),
-    updateTask: vi.fn(async (id: string, input: Partial<Task>) => {
+    appendComment: vi.fn(async (id: string, comment: NonNullable<Task['comments']>[number]) => {
       const index = tasks.findIndex((task) => task.id === id);
       if (index === -1) return null;
-      tasks[index] = { ...tasks[index], ...input, updated: new Date().toISOString() } as Task;
+      tasks[index] = {
+        ...tasks[index],
+        comments: [...(tasks[index].comments ?? []), comment],
+        updated: new Date().toISOString(),
+      } as Task;
       return tasks[index];
     }),
   };
@@ -156,7 +160,7 @@ describe('StaleTaskWatchdogService', () => {
 
     expect(first.commentsPosted).toBe(1);
     expect(second.commentsPosted).toBe(0);
-    expect(taskService.updateTask).toHaveBeenCalledTimes(1);
+    expect(taskService.appendComment).toHaveBeenCalledTimes(1);
     expect(tasks[0].comments).toHaveLength(1);
     expect(tasks[0].comments?.[0].author).toBe('veritas-watchdog');
     expect(tasks[0].comments?.[0].text).toContain('STALE CHECK:');
@@ -201,7 +205,59 @@ describe('StaleTaskWatchdogService', () => {
 
     expect(first.commentsPosted).toBe(1);
     expect(second.commentsPosted).toBe(0);
-    expect(taskService.updateTask).toHaveBeenCalledTimes(1);
+    expect(taskService.appendComment).toHaveBeenCalledTimes(1);
+  });
+
+  it('removes memory throttle entries when a task recovers', async () => {
+    const tasks = [
+      makeTask({
+        updated: '2026-05-15T00:00:00.000Z',
+        comments: [],
+      }),
+    ];
+    const { service, taskService } = makeService(
+      tasks,
+      [
+        makeAgent({
+          status: 'offline',
+          lastHeartbeat: '2026-05-15T00:10:00.000Z',
+        }),
+      ]
+    );
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-15T00:45:00.000Z'));
+    const first = await service.run({
+      postComments: true,
+      taskThresholdMinutes: 30,
+      heartbeatThresholdMinutes: 10,
+      commentThrottleMinutes: 30,
+    });
+
+    tasks[0].status = 'done';
+    tasks[0].comments = [];
+
+    vi.setSystemTime(new Date('2026-05-15T00:50:00.000Z'));
+    const recovered = await service.run({
+      postComments: true,
+      taskThresholdMinutes: 30,
+      heartbeatThresholdMinutes: 10,
+      commentThrottleMinutes: 30,
+    });
+
+    tasks[0].status = 'in-progress';
+    const staleAgain = await service.run({
+      postComments: true,
+      taskThresholdMinutes: 30,
+      heartbeatThresholdMinutes: 10,
+      commentThrottleMinutes: 30,
+    });
+    vi.useRealTimers();
+
+    expect(first.commentsPosted).toBe(1);
+    expect(recovered.commentsPosted).toBe(0);
+    expect(staleAgain.commentsPosted).toBe(1);
+    expect(taskService.appendComment).toHaveBeenCalledTimes(2);
   });
 
   it('treats older non-active tasks as checkpoint issues when the agent is busy elsewhere', async () => {
@@ -242,6 +298,45 @@ describe('StaleTaskWatchdogService', () => {
     });
     expect(report.findings[0].reasons).toContain(
       'agent is busy on another active task (task_20260515_active)'
+    );
+  });
+
+  it('reports stale when currentTaskId points at another agent task', async () => {
+    const { service } = makeService(
+      [
+        makeTask({
+          id: 'task_20260515_old',
+          updated: '2026-05-15T00:00:00.000Z',
+          agent: 'codex',
+        }),
+        makeTask({
+          id: 'task_20260515_other_agent',
+          updated: '2026-05-15T00:40:00.000Z',
+          agent: 'claude',
+        }),
+      ],
+      [
+        makeAgent({
+          currentTaskId: 'task_20260515_other_agent',
+        }),
+      ]
+    );
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-15T00:45:00.000Z'));
+    const report = await service.report({
+      taskThresholdMinutes: 30,
+      heartbeatThresholdMinutes: 10,
+    });
+    vi.useRealTimers();
+
+    const finding = report.findings.find((candidate) => candidate.id === 'task_20260515_old');
+    expect(finding).toMatchObject({
+      id: 'task_20260515_old',
+      severity: 'stale',
+    });
+    expect(finding?.reasons).toContain(
+      'agent registry points at task_20260515_other_agent, not this task'
     );
   });
 

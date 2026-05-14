@@ -56,7 +56,7 @@ export interface StaleTaskWatchdogOptions {
 }
 
 interface WatchdogDependencies {
-  taskService?: Pick<TaskService, 'getTask' | 'listTasks' | 'updateTask'>;
+  taskService?: Pick<TaskService, 'appendComment' | 'getTask' | 'listTasks'>;
   agentRegistry?: Pick<ReturnType<typeof getAgentRegistryService>, 'list'>;
 }
 
@@ -102,7 +102,7 @@ function slugRef(value: string | undefined): string {
 }
 
 export class StaleTaskWatchdogService {
-  private readonly taskService: Pick<TaskService, 'getTask' | 'listTasks' | 'updateTask'>;
+  private readonly taskService: Pick<TaskService, 'appendComment' | 'getTask' | 'listTasks'>;
   private readonly agentRegistry: Pick<ReturnType<typeof getAgentRegistryService>, 'list'>;
   private readonly commentThrottleByTask = new Map<string, number>();
   private interval: ReturnType<typeof setInterval> | null = null;
@@ -228,6 +228,11 @@ export class StaleTaskWatchdogService {
         DEFAULT_COMMENT_THROTTLE_MINUTES
       );
     const nowMs = Date.now();
+    this.pruneCommentThrottle(
+      new Set(report.findings.map((finding) => finding.id)),
+      nowMs,
+      throttleMinutes
+    );
 
     for (const finding of report.findings) {
       if (commentsPosted >= maxComments) break;
@@ -302,7 +307,10 @@ export class StaleTaskWatchdogService {
 
       if (currentTaskId && currentTaskId !== task.id) {
         const registryTask = tasksById.get(currentTaskId);
-        if (registryTask?.status === 'in-progress') {
+        if (
+          registryTask?.status === 'in-progress' &&
+          this.isTaskAssignedToAgent(registryTask, agent)
+        ) {
           activeElsewhere = true;
         } else {
           reasons.push(`agent registry points at ${currentTaskId}, not this task`);
@@ -369,8 +377,13 @@ export class StaleTaskWatchdogService {
       return false;
     }
 
-    if (this.hasRecentWatchdogComment(task.comments ?? [], nowMs, throttleMinutes)) {
-      this.commentThrottleByTask.set(task.id, nowMs);
+    const recentCommentAt = this.getRecentWatchdogCommentTimestamp(
+      task.comments ?? [],
+      nowMs,
+      throttleMinutes
+    );
+    if (recentCommentAt !== null) {
+      this.commentThrottleByTask.set(task.id, recentCommentAt);
       return false;
     }
 
@@ -381,9 +394,7 @@ export class StaleTaskWatchdogService {
       timestamp: new Date(nowMs).toISOString(),
     };
 
-    const updated = await this.taskService.updateTask(task.id, {
-      comments: [...(task.comments ?? []), comment],
-    });
+    const updated = await this.taskService.appendComment(task.id, comment);
     if (!updated) {
       log.warn({ taskId: task.id }, 'Stale task watchdog failed to persist comment');
       return false;
@@ -409,19 +420,47 @@ export class StaleTaskWatchdogService {
     return false;
   }
 
-  private hasRecentWatchdogComment(
+  private pruneCommentThrottle(
+    activeFindingIds: Set<string>,
+    nowMs: number,
+    throttleMinutes: number
+  ): void {
+    const throttleMs = throttleMinutes * 60_000;
+    for (const [taskId, postedAt] of this.commentThrottleByTask.entries()) {
+      if (!activeFindingIds.has(taskId) || nowMs - postedAt >= throttleMs) {
+        this.commentThrottleByTask.delete(taskId);
+      }
+    }
+  }
+
+  private isTaskAssignedToAgent(task: Task, agent: RegisteredAgent): boolean {
+    const assignedRef = normalizeRef(task.agent);
+    if (!assignedRef) return false;
+
+    return [agent.id, agent.name, slugRef(agent.name)].some(
+      (candidate) => normalizeRef(candidate) === assignedRef
+    );
+  }
+
+  private getRecentWatchdogCommentTimestamp(
     comments: Comment[],
     nowMs: number,
     throttleMinutes: number
-  ): boolean {
+  ): number | null {
     const throttleMs = throttleMinutes * 60_000;
-    return comments.some((comment) => {
+    let latest: number | null = null;
+
+    for (const comment of comments) {
       if (comment.author !== WATCHDOG_AUTHOR || !comment.text.startsWith(STALE_COMMENT_PREFIX)) {
-        return false;
+        continue;
       }
       const timestamp = parseIso(comment.timestamp);
-      return timestamp !== null && nowMs - timestamp < throttleMs;
-    });
+      if (timestamp !== null && nowMs - timestamp < throttleMs) {
+        latest = latest === null ? timestamp : Math.max(latest, timestamp);
+      }
+    }
+
+    return latest;
   }
 }
 
