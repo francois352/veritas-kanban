@@ -262,8 +262,10 @@ class SearchService {
       const rawFilePath = this.firstString(item.path, item.file, item.filename, item.id) ?? '';
       const snippet =
         this.firstString(item.snippet, item.context, item.text, item.content, item.body) ?? '';
-      const collection =
-        this.firstString(item.collection, item.source) ?? this.inferCollection(rawFilePath);
+      const collection = this.normalizeCollection(
+        this.firstString(item.collection, item.source),
+        rawFilePath
+      );
       const score =
         this.firstNumber(item.score, item.relevance, item.rankScore) ?? 1 - index / limit;
       const filePath = this.normalizeResultPath(rawFilePath, collection);
@@ -295,6 +297,18 @@ class SearchService {
     return [];
   }
 
+  private normalizeCollection(
+    rawCollection: string | undefined,
+    rawPath: string
+  ): SearchCollection | 'unknown' {
+    if (this.isSearchCollection(rawCollection)) return rawCollection;
+
+    const sourceCollection = this.collectionFromAbsolutePath(rawPath);
+    if (sourceCollection) return sourceCollection;
+
+    return this.inferCollection(rawPath);
+  }
+
   private normalizeResultPath(rawPath: string, collection: string): string {
     const cleaned = rawPath.trim();
     if (!cleaned) return 'unknown';
@@ -320,9 +334,28 @@ class SearchService {
     return path.posix.join(collectionPrefix, normalized);
   }
 
+  private isSearchCollection(value: string | undefined): value is SearchCollection {
+    return value === 'tasks-active' || value === 'tasks-archive' || value === 'docs';
+  }
+
   private absolutePathFromRaw(rawPath: string): string | null {
     if (path.isAbsolute(rawPath)) return path.resolve(rawPath);
     if (path.win32.isAbsolute(rawPath)) return rawPath;
+    return null;
+  }
+
+  private collectionFromAbsolutePath(rawPath: string): SearchCollection | null {
+    const absolutePath = this.absolutePathFromRaw(rawPath);
+    if (!absolutePath) return null;
+
+    const normalizedAbsolute = absolutePath.replace(/\\/g, '/');
+    for (const source of this.sources(DEFAULT_COLLECTIONS)) {
+      const sourceDir = source.dir.replace(/\\/g, '/');
+      const relative = path.posix.relative(sourceDir, normalizedAbsolute);
+      if (!relative || relative.startsWith('..') || path.posix.isAbsolute(relative)) continue;
+      return source.collection;
+    }
+
     return null;
   }
 
@@ -504,11 +537,18 @@ class SearchService {
     return process.env.VERITAS_SEARCH_ROOT || getProjectRoot();
   }
 
-  private inferCollection(filePath: string): SearchCollection {
+  private inferCollection(filePath: string): SearchCollection | 'unknown' {
     const normalizedPath = filePath.replace(/\\/g, '/');
     if (normalizedPath.includes('tasks/archive')) return 'tasks-archive';
     if (normalizedPath.includes('tasks/active')) return 'tasks-active';
-    return 'docs';
+    if (
+      normalizedPath === 'docs' ||
+      normalizedPath.startsWith('docs/') ||
+      normalizedPath.includes('/docs/')
+    ) {
+      return 'docs';
+    }
+    return 'unknown';
   }
 
   private firstString(...values: unknown[]): string | undefined {

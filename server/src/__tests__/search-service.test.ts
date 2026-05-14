@@ -167,9 +167,10 @@ describe('SearchService', () => {
           results: [
             {
               path: '/srv/private/outside/task_secret.md',
+              source: '/srv/private/outside/task_secret.md',
               title: 'Outside task',
               snippet: 'outside',
-              collection: 'tasks-active',
+              collection: '/srv/private/outside/task_secret.md',
             },
           ],
         }),
@@ -180,10 +181,12 @@ describe('SearchService', () => {
     const result = await new SearchService().search({ query: 'outside' });
 
     expect(result.results[0]).toMatchObject({
-      id: 'tasks-active:result:0',
+      id: 'unknown:result:0',
       path: 'unknown',
+      collection: 'unknown',
     });
     expect(result.results[0].path).not.toContain('/srv/private');
+    expect(JSON.stringify(result.results[0])).not.toContain('/srv/private');
   });
 
   it('places flag-like qmd queries after an option separator', async () => {
