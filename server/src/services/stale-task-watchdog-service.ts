@@ -382,11 +382,15 @@ export class StaleTaskWatchdogService {
       return false;
     }
 
+    const taskUpdatedAt = parseIso(task.updated) ?? 0;
     const maxCommentsPerTask = parsePositiveInt(
       process.env.VERITAS_STALE_TASK_MAX_COMMENTS_PER_TASK,
       DEFAULT_MAX_WATCHDOG_COMMENTS_PER_TASK
     );
-    const watchdogCommentCount = (task.comments ?? []).filter(isWatchdogComment).length;
+    const watchdogCommentCount = (task.comments ?? []).filter((comment) => {
+      const timestamp = parseIso(comment.timestamp);
+      return isWatchdogComment(comment) && timestamp !== null && timestamp >= taskUpdatedAt;
+    }).length;
     if (watchdogCommentCount >= maxCommentsPerTask) {
       log.info(
         { taskId: task.id, watchdogCommentCount, maxCommentsPerTask },
@@ -395,7 +399,6 @@ export class StaleTaskWatchdogService {
       return false;
     }
 
-    const taskUpdatedAt = parseIso(task.updated) ?? 0;
     const recentCommentAt = this.getRecentWatchdogCommentTimestamp(
       task.comments ?? [],
       nowMs,

@@ -299,6 +299,71 @@ describe('StaleTaskWatchdogService', () => {
     expect(taskService.appendComment).not.toHaveBeenCalled();
   });
 
+  it('continues posting later findings when one comment append fails', async () => {
+    const tasks = [
+      makeTask({
+        id: 'task_20260515_first',
+        updated: '2026-05-15T00:00:00.000Z',
+        agent: 'codex',
+        comments: [],
+      }),
+      makeTask({
+        id: 'task_20260515_second',
+        updated: '2026-05-15T00:10:00.000Z',
+        agent: 'claude',
+        comments: [],
+      }),
+    ];
+    const { service, taskService } = makeService(
+      tasks,
+      [
+        makeAgent({
+          id: 'codex',
+          name: 'Codex',
+          status: 'offline',
+          lastHeartbeat: '2026-05-15T00:10:00.000Z',
+          currentTaskId: 'task_20260515_first',
+        }),
+        makeAgent({
+          id: 'claude',
+          name: 'Claude',
+          status: 'offline',
+          lastHeartbeat: '2026-05-15T00:10:00.000Z',
+          currentTaskId: 'task_20260515_second',
+        }),
+      ]
+    );
+    let appendCalls = 0;
+    taskService.appendComment.mockImplementation(async (id, comment) => {
+      appendCalls++;
+      if (appendCalls === 1) {
+        throw new Error('disk unavailable');
+      }
+      const index = tasks.findIndex((task) => task.id === id);
+      if (index === -1) return null;
+      tasks[index] = {
+        ...tasks[index],
+        comments: [...(tasks[index].comments ?? []), comment],
+        updated: new Date().toISOString(),
+      } as Task;
+      return tasks[index];
+    });
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-15T00:45:00.000Z'));
+    const result = await service.run({
+      postComments: true,
+      taskThresholdMinutes: 30,
+      heartbeatThresholdMinutes: 10,
+      commentThrottleMinutes: 30,
+    });
+    vi.useRealTimers();
+
+    expect(result.commentsPosted).toBe(1);
+    expect(taskService.appendComment).toHaveBeenCalledTimes(2);
+    expect(tasks[1].comments).toHaveLength(1);
+  });
+
   it('treats older non-active tasks as checkpoint issues when the agent is busy elsewhere', async () => {
     const { service } = makeService(
       [

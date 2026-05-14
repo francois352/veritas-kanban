@@ -941,10 +941,8 @@ export class TaskService {
     let updatedTask!: Task;
 
     await withFileLock(filepath, async () => {
-      const freshFilename = (await this.findTaskFile(this.tasksDir, id)) ?? initialFilename;
-      const freshPath = path.join(this.tasksDir, freshFilename);
-      const content = await fs.readFile(freshPath, 'utf-8');
-      const freshTask = this.parseTaskFile(content, freshFilename);
+      const content = await fs.readFile(filepath, 'utf-8');
+      const freshTask = this.parseTaskFile(content, initialFilename);
       if (!freshTask) {
         throw new Error(`Unable to parse task before appending comment: ${id}`);
       }
@@ -956,11 +954,11 @@ export class TaskService {
       };
 
       const updatedContent = this.taskToMarkdown(updatedTask);
-      const tmpPath = `${freshPath}.tmp.${process.pid}.${Date.now()}`;
+      const tmpPath = `${filepath}.tmp.${process.pid}.${Date.now()}`;
       this.markWrite();
       try {
         await fs.writeFile(tmpPath, updatedContent, 'utf-8');
-        await fs.rename(tmpPath, freshPath);
+        await fs.rename(tmpPath, filepath);
       } catch (error) {
         await fs.unlink(tmpPath).catch(() => {});
         throw error;
