@@ -20,8 +20,11 @@ const MAX_SEEN_SIGNATURES = 10_000;
 const O_NOFOLLOW = fs.constants.O_NOFOLLOW ?? 0;
 const seenSignatures = new Map<string, number>();
 
-const AUDIT_LOG_PATH =
-  process.env.KANBAN_SIG_AUDIT_LOG_PATH?.trim() || '/var/log/veritas/audit-signature-reject.jsonl';
+const DEFAULT_AUDIT_LOG_PATH = '/var/log/veritas/audit-signature-reject.jsonl';
+
+function resolveAuditLogPath(): string {
+  return process.env.KANBAN_SIG_AUDIT_LOG_PATH?.trim() || DEFAULT_AUDIT_LOG_PATH;
+}
 
 type RejectReason = 'missing' | 'skewed' | 'wrong' | 'unknown_agent';
 
@@ -53,8 +56,9 @@ function appendAuditReject(req: Request, actor: string | undefined, reason: Reje
       remote_ip: req.ip || req.socket.remoteAddress || '',
       body_hash: hashKanbanBody(rawBody),
     };
-    fs.mkdirSync(path.dirname(AUDIT_LOG_PATH), { recursive: true });
-    fs.appendFileSync(AUDIT_LOG_PATH, `${JSON.stringify(row)}\n`, {
+    const auditLogPath = resolveAuditLogPath();
+    fs.mkdirSync(path.dirname(auditLogPath), { recursive: true });
+    fs.appendFileSync(auditLogPath, `${JSON.stringify(row)}\n`, {
       encoding: 'utf8',
       mode: 0o640,
       flag: 'a',
@@ -433,8 +437,9 @@ export function getKanbanSignatureDiagnostics(): SignatureDiagnostics {
   let rejected = 0;
   const cutoff = Date.now() - 24 * 60 * 60 * 1000;
   try {
-    if (fs.existsSync(AUDIT_LOG_PATH)) {
-      const rows = fs.readFileSync(AUDIT_LOG_PATH, 'utf8').split('\n');
+    const auditLogPath = resolveAuditLogPath();
+    if (fs.existsSync(auditLogPath)) {
+      const rows = fs.readFileSync(auditLogPath, 'utf8').split('\n');
       for (const row of rows) {
         if (!row.trim()) continue;
         const parsed = JSON.parse(row) as { ts?: string };
