@@ -16,6 +16,7 @@ import type { Request } from 'express';
  *  - authRateLimit   — 10 req / 15 min (login, token refresh)
  *  - uploadRateLimit — 20 req / min   (file uploads)
  *  - writeRateLimit  — 60 req / min   (POST, PUT, PATCH, DELETE)
+ *  - searchRateLimit — 60 req / min   (search scans / QMD queries)
  *  - readRateLimit   — 300 req / min  (GET requests)
  *  - apiRateLimit    — 300 req / min  (global fallback, localhost exempt)
  */
@@ -128,6 +129,16 @@ export const readRateLimit = rateLimit({
   limit: 300,
   windowMs: 60_000,
   message: 'Too many read requests. Please slow down.',
+});
+
+/**
+ * Dedicated limiter for search requests: 60 req / min per IP.
+ * Search is semantically read-only but can perform recursive file scans or QMD queries.
+ */
+export const searchRateLimit = rateLimit({
+  limit: 60,
+  windowMs: 60_000,
+  message: 'Too many search requests. Please slow down.',
 });
 
 /**

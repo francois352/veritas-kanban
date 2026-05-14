@@ -1466,6 +1466,106 @@ Returns past errors similar to the query string — useful for avoiding repeated
 
 ---
 
+## Search
+
+QMD-ready retrieval across task markdown and docs. The endpoint uses the configured backend and gracefully falls back to keyword search when QMD is unavailable.
+
+Mounted at `/api/search`.
+
+| Method | Path                        | Description                                     |
+| ------ | --------------------------- | ----------------------------------------------- |
+| `POST` | `/api/search`               | Search task and docs collections with one query |
+| `POST` | `/api/search/index/refresh` | Refresh QMD collections and embeddings          |
+
+### Search Collections
+
+```
+POST /api/search
+```
+
+**Body**:
+
+```json
+{
+  "query": "semantic search duplicate detection",
+  "limit": 10,
+  "collections": ["tasks-active", "tasks-archive", "docs"],
+  "backend": "auto"
+}
+```
+
+`backend` may be `keyword`, `qmd`, or `auto`. QMD is opt-in via `VERITAS_SEARCH_BACKEND=qmd` or per-request `backend: "qmd"`. Read-only API keys are served with the keyword backend even if they request `auto` or `qmd`. Search requests use a dedicated rate limit because they can scan files or call QMD.
+
+**Response** `200`:
+
+```json
+{
+  "query": "semantic search duplicate detection",
+  "backend": "keyword",
+  "degraded": false,
+  "elapsedMs": 12,
+  "results": [
+    {
+      "id": "tasks/active/task_20260504_example.md",
+      "title": "Add semantic search",
+      "path": "tasks/active/task_20260504_example.md",
+      "collection": "tasks-active",
+      "snippet": "Wire QMD retrieval into Veritas.",
+      "score": 4
+    }
+  ]
+}
+```
+
+Raw QMD result metadata and absolute source paths are not included in the public response.
+
+### QMD Setup
+
+```bash
+npm install -g @tobilu/qmd
+pnpm qmd:setup
+VERITAS_SEARCH_BACKEND=qmd pnpm dev
+```
+
+### QMD Index Refresh
+
+```
+POST /api/search/index/refresh
+```
+
+**Body**:
+
+```json
+{
+  "embed": true
+}
+```
+
+Refresh re-registers the configured QMD collections before updating, so `DATA_DIR` task storage is reflected in existing deployments. Set `embed` to `false` to skip `qmd embed`.
+
+**Response** `200`:
+
+```json
+{
+  "backend": "qmd",
+  "updated": true,
+  "embedded": true,
+  "elapsedMs": 982,
+  "commands": [
+    "collection remove tasks-active",
+    "collection add tasks-active",
+    "collection remove tasks-archive",
+    "collection add tasks-archive",
+    "collection remove docs",
+    "collection add docs",
+    "update",
+    "embed"
+  ]
+}
+```
+
+---
+
 ## Tool Policies
 
 Role-based tool access restrictions — control which tools each agent role can use.
@@ -1764,7 +1864,6 @@ These endpoints follow the same auth/error patterns documented above:
 | `/api/tool-policies`             | Tool access policies                          |
 | `/api/integrations`              | External integrations                         |
 | `/api/settings/transition-hooks` | Status transition hooks                       |
-
 | `/api/feedback`                  | User feedback & sentiment analytics           |
 | `/api/decisions`                 | Decision audit trail                          |
 | `/api/drift`                     | Behavioral drift detection                    |
@@ -1863,9 +1962,7 @@ Query params: `agent`, `since`, `until`.
     { "category": "output-quality", "count": 18 },
     { "category": "accuracy", "count": 12 }
   ],
-  "trend": [
-    { "date": "2026-03-21", "positive": 5, "neutral": 1, "negative": 0 }
-  ]
+  "trend": [{ "date": "2026-03-21", "positive": 5, "neutral": 1, "negative": 0 }]
 }
 ```
 

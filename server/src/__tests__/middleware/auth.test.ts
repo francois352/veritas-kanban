@@ -503,6 +503,59 @@ describe('Auth Middleware', () => {
       expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'WRITE_FORBIDDEN' }));
     });
 
+    it('should allow read-only POST for search queries', () => {
+      const req = mockRequest({
+        method: 'POST',
+        originalUrl: '/api/search',
+      }) as AuthenticatedRequest;
+      req.auth = { role: 'read-only', isLocalhost: false };
+      const res = mockResponse();
+      const next = mockNext();
+
+      authorizeWrite(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should allow read-only POST for v1 search queries', () => {
+      const req = mockRequest({
+        method: 'POST',
+        originalUrl: '/api/v1/search',
+      }) as AuthenticatedRequest;
+      req.auth = { role: 'read-only', isLocalhost: false };
+      const res = mockResponse();
+      const next = mockNext();
+
+      authorizeWrite(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should allow read-only POST for prefixed search queries', () => {
+      const req = mockRequest({
+        method: 'POST',
+        originalUrl: '/veritas/api/v1/search',
+      }) as AuthenticatedRequest;
+      req.auth = { role: 'read-only', isLocalhost: false };
+      const res = mockResponse();
+      const next = mockNext();
+
+      authorizeWrite(req, res, next);
+      expect(next).toHaveBeenCalled();
+    });
+
+    it('should deny read-only POST for search index refresh', () => {
+      const req = mockRequest({
+        method: 'POST',
+        originalUrl: '/api/search/index/refresh',
+      }) as AuthenticatedRequest;
+      req.auth = { role: 'read-only', isLocalhost: false };
+      const res = mockResponse();
+      const next = mockNext();
+
+      authorizeWrite(req, res, next);
+      expect(next).not.toHaveBeenCalled();
+      expect(res.status).toHaveBeenCalledWith(403);
+    });
+
     it('should deny read-only DELETE', () => {
       const req = mockRequest({ method: 'DELETE' }) as AuthenticatedRequest;
       req.auth = { role: 'read-only', isLocalhost: false };

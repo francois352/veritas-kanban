@@ -44,6 +44,11 @@ export interface AuthenticatedRequest extends Request {
   };
 }
 
+function isSearchQueryPath(pathname: string): boolean {
+  const normalized = pathname.replace(/\/+$/, '') || '/';
+  return normalized === '/search' || /(?:^|\/)api(?:\/v\d+)?\/search$/.test(normalized);
+}
+
 // === Configuration ===
 
 // Load auth config from environment variables
@@ -383,6 +388,11 @@ export function authorizeWrite(req: AuthenticatedRequest, res: Response, next: N
   // Read-only can only GET
   const readMethods = ['GET', 'HEAD', 'OPTIONS'];
   if (req.auth.role === 'read-only' && readMethods.includes(req.method)) {
+    return next();
+  }
+
+  const pathname = (req.originalUrl || req.url || '').split('?')[0] ?? '';
+  if (req.auth.role === 'read-only' && req.method === 'POST' && isSearchQueryPath(pathname)) {
     return next();
   }
 

@@ -8,6 +8,7 @@ import {
   policySchema,
 } from '../schemas/policy-schemas.js';
 import { validate, type ValidatedRequest } from '../middleware/validate.js';
+import { authorize } from '../middleware/auth.js';
 
 const router = Router();
 const policyService = getPolicyService();
@@ -22,6 +23,7 @@ router.get(
 
 router.post(
   '/',
+  authorize('admin'),
   validate({ body: policySchema }),
   asyncHandler(async (req: ValidatedRequest<unknown, unknown, AgentPolicy>, res) => {
     const policy = await policyService.createPolicy(req.validated.body as AgentPolicy);
@@ -31,6 +33,7 @@ router.post(
 
 router.put(
   '/:id',
+  authorize('admin'),
   validate({ params: policyParamsSchema, body: policySchema }),
   asyncHandler(async (req: ValidatedRequest<{ id: string }, unknown, AgentPolicy>, res) => {
     const { id } = req.validated.params as { id: string };
@@ -41,6 +44,7 @@ router.put(
 
 router.delete(
   '/:id',
+  authorize('admin'),
   validate({ params: policyParamsSchema }),
   asyncHandler(async (req: ValidatedRequest<{ id: string }>, res) => {
     const { id } = req.validated.params as { id: string };

@@ -14,6 +14,7 @@ import { timeApi, statusHistoryApi } from './time';
 import { chatApi } from './chat';
 import { decisionsApi } from './decisions';
 import { scoringApi } from './scoring';
+import { searchApi } from './search';
 
 // Assemble the full API object (matches original structure exactly)
 export const api = {
@@ -38,7 +39,16 @@ export const api = {
   chat: chatApi,
   decisions: decisionsApi,
   scoring: scoringApi,
+  search: searchApi,
 };
+
+export type {
+  SearchBackend,
+  SearchCollection,
+  SearchRequest,
+  SearchResponse,
+  SearchResult,
+} from './search';
 
 // Re-export managed list helper
 export { managedList } from './managed-list';

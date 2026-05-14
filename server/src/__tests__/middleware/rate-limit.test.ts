@@ -13,6 +13,7 @@ import {
   authRateLimit,
   writeRateLimit,
   readRateLimit,
+  searchRateLimit,
   uploadRateLimit,
   strictRateLimit,
 } from '../../middleware/rate-limit.js';
@@ -151,6 +152,10 @@ describe('Rate Limit Middleware', () => {
 
     it('should export readRateLimit', () => {
       expect(typeof readRateLimit).toBe('function');
+    });
+
+    it('should export searchRateLimit', () => {
+      expect(typeof searchRateLimit).toBe('function');
     });
 
     it('should export uploadRateLimit', () => {

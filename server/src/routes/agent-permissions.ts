@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { getAgentPermissionService } from '../services/agent-permission-service.js';
 import { asyncHandler } from '../middleware/async-handler.js';
 import { NotFoundError } from '../middleware/error-handler.js';
+import { authorize } from '../middleware/auth.js';
 
 const router: RouterType = Router();
 
@@ -62,6 +63,7 @@ router.get(
  */
 router.put(
   '/:id/level',
+  authorize('admin'),
   asyncHandler(async (req, res) => {
     const schema = z.object({
       level: z.enum(['intern', 'specialist', 'lead']),
@@ -78,6 +80,7 @@ router.put(
  */
 router.patch(
   '/:id',
+  authorize('admin'),
   asyncHandler(async (req, res) => {
     const schema = z.object({
       trustedDomains: z.array(z.string()).optional(),
@@ -135,6 +138,7 @@ router.post(
  */
 router.post(
   '/approvals/:id',
+  authorize('admin'),
   asyncHandler(async (req, res) => {
     const schema = z.object({
       decision: z.enum(['approved', 'rejected']),
