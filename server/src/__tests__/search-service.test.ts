@@ -50,6 +50,31 @@ describe('SearchService', () => {
     expect(result.results[0].path).toContain('tasks/active/task_1.md');
   });
 
+  it('honors DATA_DIR task storage when search root is not overridden', async () => {
+    delete process.env.VERITAS_SEARCH_ROOT;
+    const dataRoot = path.join(root, 'data-root');
+    await fs.mkdir(path.join(dataRoot, 'tasks', 'active'), { recursive: true });
+    await fs.mkdir(path.join(dataRoot, 'tasks', 'archive'), { recursive: true });
+    process.env.DATA_DIR = dataRoot;
+
+    await fs.writeFile(
+      path.join(dataRoot, 'tasks', 'active', 'task_20260514_data01.md'),
+      '# Production DATA_DIR Task\n\ndata-dir-only-needle',
+      'utf-8'
+    );
+
+    const result = await new SearchService().search({
+      query: 'data-dir-only-needle',
+      backend: 'keyword',
+      collections: ['tasks-active'],
+      limit: 5,
+    });
+
+    expect(result.backend).toBe('keyword');
+    expect(result.results).toHaveLength(1);
+    expect(result.results[0].path).toContain('tasks/active/task_20260514_data01.md');
+  });
+
   it('falls back to keyword search when qmd fails', async () => {
     process.env.VERITAS_SEARCH_BACKEND = 'qmd';
     execFileMock.mockImplementation((_bin, _args, _options, callback) => {

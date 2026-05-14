@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createLogger } from '../lib/logger.js';
+import { getProjectRoot, getTasksActiveDir, getTasksArchiveDir } from '../utils/paths.js';
 
 const log = createLogger('search-service');
 
@@ -48,7 +49,6 @@ interface SearchSource {
   dir: string;
 }
 
-const PROJECT_ROOT = path.resolve(process.cwd(), '..');
 const DEFAULT_COLLECTIONS: SearchCollection[] = ['tasks-active', 'tasks-archive', 'docs'];
 const MAX_LIMIT = 50;
 const DEFAULT_QMD_TIMEOUT_MS = 10_000;
@@ -319,14 +319,19 @@ class SearchService {
   private sources(collections?: SearchCollection[]): SearchSource[] {
     const selected = new Set(this.normalizeCollections(collections));
     const root = this.projectRoot();
+    const searchRoot = process.env.VERITAS_SEARCH_ROOT;
     const candidates: SearchSource[] = [
       {
         collection: 'tasks-active',
-        dir: process.env.VERITAS_SEARCH_TASKS_ACTIVE_DIR || path.join(root, 'tasks', 'active'),
+        dir:
+          process.env.VERITAS_SEARCH_TASKS_ACTIVE_DIR ||
+          (searchRoot ? path.join(searchRoot, 'tasks', 'active') : getTasksActiveDir()),
       },
       {
         collection: 'tasks-archive',
-        dir: process.env.VERITAS_SEARCH_TASKS_ARCHIVE_DIR || path.join(root, 'tasks', 'archive'),
+        dir:
+          process.env.VERITAS_SEARCH_TASKS_ARCHIVE_DIR ||
+          (searchRoot ? path.join(searchRoot, 'tasks', 'archive') : getTasksArchiveDir()),
       },
       {
         collection: 'docs',
@@ -384,12 +389,13 @@ class SearchService {
   }
 
   private projectRoot(): string {
-    return process.env.VERITAS_SEARCH_ROOT || PROJECT_ROOT;
+    return process.env.VERITAS_SEARCH_ROOT || getProjectRoot();
   }
 
   private inferCollection(filePath: string): SearchCollection {
-    if (filePath.includes('tasks/archive')) return 'tasks-archive';
-    if (filePath.includes('tasks/active')) return 'tasks-active';
+    const normalizedPath = filePath.replace(/\\/g, '/');
+    if (normalizedPath.includes('tasks/archive')) return 'tasks-archive';
+    if (normalizedPath.includes('tasks/active')) return 'tasks-active';
     return 'docs';
   }
 
