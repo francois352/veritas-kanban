@@ -57,7 +57,7 @@ export interface StaleTaskWatchdogOptions {
 }
 
 interface WatchdogDependencies {
-  taskService?: Pick<TaskService, 'appendComment' | 'getTask' | 'listTasks'>;
+  taskService?: Pick<TaskService, 'appendComment' | 'getTask' | 'listInProgressTasks'>;
   agentRegistry?: Pick<ReturnType<typeof getAgentRegistryService>, 'list'>;
 }
 
@@ -107,9 +107,10 @@ function isWatchdogComment(comment: Comment): boolean {
 }
 
 export class StaleTaskWatchdogService {
-  private readonly taskService: Pick<TaskService, 'appendComment' | 'getTask' | 'listTasks'>;
+  private readonly taskService: Pick<TaskService, 'appendComment' | 'getTask' | 'listInProgressTasks'>;
   private readonly agentRegistry: Pick<ReturnType<typeof getAgentRegistryService>, 'list'>;
   private readonly commentThrottleByTask = new Map<string, number>();
+  private lastRunResult: StaleTaskWatchdogRunResult | null = null;
   private runInFlight = false;
   private interval: ReturnType<typeof setInterval> | null = null;
 
@@ -174,14 +175,13 @@ export class StaleTaskWatchdogService {
       );
 
     const [tasks, agents] = await Promise.all([
-      this.taskService.listTasks(),
+      this.taskService.listInProgressTasks(),
       Promise.resolve(this.agentRegistry.list()),
     ]);
 
     const agentsByRef = this.indexAgents(agents);
     const tasksById = new Map(tasks.map((task) => [task.id, task]));
     const findings = tasks
-      .filter((task) => task.status === 'in-progress')
       .map((task) =>
         this.assessTask(
           task,
@@ -220,9 +220,26 @@ export class StaleTaskWatchdogService {
     }
 
     if (this.runInFlight) {
-      const report = await this.report(options);
-      log.info({ findings: report.findings.length }, 'Stale task watchdog run skipped; already running');
-      return { ...report, commentsPosted: 0 };
+      log.info('Stale task watchdog run skipped; already running');
+      return (
+        this.lastRunResult ?? {
+          checkedAt: new Date().toISOString(),
+          taskThresholdMinutes:
+            options.taskThresholdMinutes ??
+            parsePositiveInt(
+              process.env.VERITAS_STALE_TASK_THRESHOLD_MINUTES,
+              DEFAULT_TASK_THRESHOLD_MINUTES
+            ),
+          heartbeatThresholdMinutes:
+            options.heartbeatThresholdMinutes ??
+            parsePositiveInt(
+              process.env.VERITAS_STALE_HEARTBEAT_THRESHOLD_MINUTES,
+              DEFAULT_HEARTBEAT_THRESHOLD_MINUTES
+            ),
+          findings: [],
+          commentsPosted: 0,
+        }
+      );
     }
 
     this.runInFlight = true;
@@ -264,7 +281,9 @@ export class StaleTaskWatchdogService {
         );
       }
 
-      return { ...report, commentsPosted };
+      const result = { ...report, commentsPosted };
+      this.lastRunResult = result;
+      return result;
     } finally {
       this.runInFlight = false;
     }

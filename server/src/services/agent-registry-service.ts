@@ -308,6 +308,7 @@ class AgentRegistryService {
     }
 
     const byAgentRef = new Map<string, TaskSyncSnapshot>();
+    const tasksById = new Map(tasks.map((task) => [task.id, task]));
 
     for (const task of tasks) {
       if (!task.agent) continue;
@@ -357,8 +358,8 @@ class AgentRegistryService {
       }
 
       if (agent.status === 'busy' && agent.currentTaskId) {
-        const task = tasks.find((t) => t.id === agent.currentTaskId);
-        if (!task && snapshotHasTasks) {
+        const task = tasksById.get(agent.currentTaskId);
+        if (!task && snapshotHasTasks && mapped) {
           const nowMs = Date.now();
           const lastBusyAt = this.lastBusyAtByAgent.get(agent.id);
           const firstMissingAt = this.missingTaskSeenAtByAgent.get(agent.id);

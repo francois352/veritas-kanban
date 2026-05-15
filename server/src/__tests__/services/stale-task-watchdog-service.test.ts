@@ -40,7 +40,7 @@ function makeAgent(overrides: Partial<RegisteredAgent> = {}): RegisteredAgent {
 
 function makeService(tasks: Task[], agents: RegisteredAgent[]) {
   const taskService = {
-    listTasks: vi.fn(async () => tasks),
+    listInProgressTasks: vi.fn(async () => tasks.filter((task) => task.status === 'in-progress')),
     getTask: vi.fn(async (id: string) => tasks.find((task) => task.id === id) ?? null),
     appendComment: vi.fn(
       async (

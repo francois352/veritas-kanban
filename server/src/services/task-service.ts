@@ -521,6 +521,11 @@ export class TaskService {
     return this.cacheList();
   }
 
+  async listInProgressTasks(): Promise<Task[]> {
+    const tasks = await this.listTasks();
+    return tasks.filter((task) => task.status === 'in-progress');
+  }
+
   /**
    * Batch-resolve task dependencies to avoid N+1 queries
    * Loads all tasks once, then resolves dependencies from memory

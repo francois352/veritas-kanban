@@ -779,7 +779,7 @@ describe('AgentRegistryService', () => {
           {
             id: 'task_20260228_other',
             status: 'todo',
-            agent: 'other-agent',
+            agent: 'coder-1',
           },
         ],
         TASK_RECONCILE_CONTEXT
@@ -794,7 +794,7 @@ describe('AgentRegistryService', () => {
           {
             id: 'task_20260228_other',
             status: 'todo',
-            agent: 'other-agent',
+            agent: 'coder-1',
           },
         ],
         TASK_RECONCILE_CONTEXT
