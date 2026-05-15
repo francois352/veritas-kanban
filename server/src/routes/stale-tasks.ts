@@ -1,10 +1,13 @@
 import { Router, type Router as RouterType } from 'express';
 import { z } from 'zod';
 import { asyncHandler } from '../middleware/async-handler.js';
+import { authenticate, authorizeWrite } from '../middleware/auth.js';
 import { ValidationError } from '../middleware/error-handler.js';
 import { getStaleTaskWatchdogService } from '../services/stale-task-watchdog-service.js';
 
 const router: RouterType = Router();
+router.use(authenticate);
+router.use(authorizeWrite);
 
 const staleQuerySchema = z.object({
   taskThresholdMinutes: z.coerce.number().int().positive().optional(),

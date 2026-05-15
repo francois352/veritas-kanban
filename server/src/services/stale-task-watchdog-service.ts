@@ -110,6 +110,7 @@ export class StaleTaskWatchdogService {
   private readonly taskService: Pick<TaskService, 'appendComment' | 'getTask' | 'listTasks'>;
   private readonly agentRegistry: Pick<ReturnType<typeof getAgentRegistryService>, 'list'>;
   private readonly commentThrottleByTask = new Map<string, number>();
+  private runInFlight = false;
   private interval: ReturnType<typeof setInterval> | null = null;
 
   constructor(deps: WatchdogDependencies = {}) {
@@ -213,47 +214,60 @@ export class StaleTaskWatchdogService {
   async run(
     options: StaleTaskWatchdogOptions & { postComments?: boolean } = {}
   ): Promise<StaleTaskWatchdogRunResult> {
-    const report = await this.report(options);
-    let commentsPosted = 0;
-
     if (!options.postComments) {
-      return { ...report, commentsPosted };
+      const report = await this.report(options);
+      return { ...report, commentsPosted: 0 };
     }
 
-    const configuredMaxComments = parsePositiveInt(
-      process.env.VERITAS_STALE_TASK_WATCHDOG_MAX_COMMENTS,
-      DEFAULT_MAX_COMMENTS_PER_RUN
-    );
-    const requestedMaxComments = options.maxCommentsPerRun ?? configuredMaxComments;
-    const maxComments = Math.min(requestedMaxComments, configuredMaxComments);
-    const throttleMinutes =
-      options.commentThrottleMinutes ??
-      parsePositiveInt(
-        process.env.VERITAS_STALE_TASK_COMMENT_THROTTLE_MINUTES,
-        DEFAULT_COMMENT_THROTTLE_MINUTES
-      );
-    const nowMs = Date.now();
-    this.pruneCommentThrottle(
-      new Set(report.findings.map((finding) => finding.id)),
-      nowMs,
-      throttleMinutes
-    );
+    if (this.runInFlight) {
+      const report = await this.report(options);
+      log.info({ findings: report.findings.length }, 'Stale task watchdog run skipped; already running');
+      return { ...report, commentsPosted: 0 };
+    }
 
-    for (const finding of report.findings) {
-      if (commentsPosted >= maxComments) break;
-      if (await this.postStaleComment(finding, nowMs, throttleMinutes)) {
-        commentsPosted++;
+    this.runInFlight = true;
+
+    try {
+      const report = await this.report(options);
+      let commentsPosted = 0;
+
+      const configuredMaxComments = parsePositiveInt(
+        process.env.VERITAS_STALE_TASK_WATCHDOG_MAX_COMMENTS,
+        DEFAULT_MAX_COMMENTS_PER_RUN
+      );
+      const requestedMaxComments = options.maxCommentsPerRun ?? configuredMaxComments;
+      const maxComments = Math.min(requestedMaxComments, configuredMaxComments);
+      const throttleMinutes =
+        options.commentThrottleMinutes ??
+        parsePositiveInt(
+          process.env.VERITAS_STALE_TASK_COMMENT_THROTTLE_MINUTES,
+          DEFAULT_COMMENT_THROTTLE_MINUTES
+        );
+      const nowMs = Date.now();
+      this.pruneCommentThrottle(
+        new Set(report.findings.map((finding) => finding.id)),
+        nowMs,
+        throttleMinutes
+      );
+
+      for (const finding of report.findings) {
+        if (commentsPosted >= maxComments) break;
+        if (await this.postStaleComment(finding, nowMs, throttleMinutes)) {
+          commentsPosted++;
+        }
       }
-    }
 
-    if (report.findings.length > 0 || commentsPosted > 0) {
-      log.info(
-        { findings: report.findings.length, commentsPosted },
-        'Stale task watchdog run complete'
-      );
-    }
+      if (report.findings.length > 0 || commentsPosted > 0) {
+        log.info(
+          { findings: report.findings.length, commentsPosted },
+          'Stale task watchdog run complete'
+        );
+      }
 
-    return { ...report, commentsPosted };
+      return { ...report, commentsPosted };
+    } finally {
+      this.runInFlight = false;
+    }
   }
 
   private indexAgents(agents: RegisteredAgent[]): Map<string, RegisteredAgent> {

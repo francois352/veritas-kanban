@@ -254,6 +254,45 @@ describe('StaleTaskWatchdogService', () => {
     expect(taskService.appendComment).toHaveBeenCalledTimes(1);
   });
 
+  it('skips overlapping comment runs', async () => {
+    const tasks = [
+      makeTask({
+        updated: '2026-05-15T00:00:00.000Z',
+        comments: [],
+      }),
+    ];
+    const { service, taskService } = makeService(
+      tasks,
+      [
+        makeAgent({
+          status: 'offline',
+          lastHeartbeat: '2026-05-15T00:10:00.000Z',
+        }),
+      ]
+    );
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-15T00:45:00.000Z'));
+    const first = service.run({
+      postComments: true,
+      taskThresholdMinutes: 30,
+      heartbeatThresholdMinutes: 10,
+      commentThrottleMinutes: 30,
+    });
+    const second = await service.run({
+      postComments: true,
+      taskThresholdMinutes: 30,
+      heartbeatThresholdMinutes: 10,
+      commentThrottleMinutes: 30,
+    });
+    const firstResult = await first;
+    vi.useRealTimers();
+
+    expect(firstResult.commentsPosted).toBe(1);
+    expect(second.commentsPosted).toBe(0);
+    expect(taskService.appendComment).toHaveBeenCalledTimes(1);
+  });
+
   it('removes memory throttle entries when a task recovers', async () => {
     const tasks = [
       makeTask({

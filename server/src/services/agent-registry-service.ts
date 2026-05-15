@@ -128,6 +128,7 @@ const STALE_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
 
 /** Prevent rapid busy<->idle oscillation on quick status churn */
 const DEFAULT_TASK_SYNC_FLAP_GUARD_MS = 10 * 1000; // 10 seconds
+const MISSING_TASK_CLEAR_GRACE_MS = 60 * 1000; // 1 minute
 const MAX_RECONCILE_ABSURD_FUTURE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function getTaskSyncFlapGuardMs(): number {
@@ -161,6 +162,7 @@ class AgentRegistryService {
   private legacyFilePath: string;
   private staleCheckInterval: ReturnType<typeof setInterval> | null = null;
   private lastBusyAtByAgent: Map<string, number> = new Map();
+  private missingTaskSeenAtByAgent: Map<string, number> = new Map();
   private taskSyncFlapGuardMs: number;
 
   constructor() {
@@ -336,6 +338,7 @@ class AgentRegistryService {
         byAgentRef.get(agent.name.trim().toLowerCase());
 
       if (mapped?.status === 'in-progress') {
+        this.missingTaskSeenAtByAgent.delete(agent.id);
         const prevStatus = agent.status;
         const prevTaskId = agent.currentTaskId;
         const updated = this.syncFromTask(
@@ -356,8 +359,17 @@ class AgentRegistryService {
       if (agent.status === 'busy' && agent.currentTaskId) {
         const task = tasks.find((t) => t.id === agent.currentTaskId);
         if (!task && snapshotHasTasks) {
+          const nowMs = Date.now();
           const lastBusyAt = this.lastBusyAtByAgent.get(agent.id);
-          if (lastBusyAt && Date.now() - lastBusyAt < this.taskSyncFlapGuardMs) {
+          const firstMissingAt = this.missingTaskSeenAtByAgent.get(agent.id);
+          if (!firstMissingAt) {
+            this.missingTaskSeenAtByAgent.set(agent.id, nowMs);
+            continue;
+          }
+          if (
+            (lastBusyAt && nowMs - lastBusyAt < this.taskSyncFlapGuardMs) ||
+            nowMs - firstMissingAt < MISSING_TASK_CLEAR_GRACE_MS
+          ) {
             continue;
           }
 
@@ -365,9 +377,14 @@ class AgentRegistryService {
           agent.currentTaskId = undefined;
           agent.currentTaskTitle = undefined;
           this.agents.set(agent.id, agent);
+          this.missingTaskSeenAtByAgent.delete(agent.id);
           changed++;
           directRegistryChanged = true;
           continue;
+        }
+
+        if (task) {
+          this.missingTaskSeenAtByAgent.delete(agent.id);
         }
 
         if (task && task.status !== 'in-progress') {
@@ -401,6 +418,7 @@ class AgentRegistryService {
   deregister(agentId: string): boolean {
     const existed = this.agents.delete(agentId);
     this.lastBusyAtByAgent.delete(agentId);
+    this.missingTaskSeenAtByAgent.delete(agentId);
     if (existed) {
       this.persist();
       log.info({ agentId }, `Agent deregistered: ${agentId}`);

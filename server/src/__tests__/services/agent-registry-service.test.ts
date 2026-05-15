@@ -774,6 +774,21 @@ describe('AgentRegistryService', () => {
       );
 
       vi.setSystemTime(new Date('2026-02-28T12:00:15.000Z'));
+      const firstChanged = service.reconcileFromTasks(
+        [
+          {
+            id: 'task_20260228_other',
+            status: 'todo',
+            agent: 'other-agent',
+          },
+        ],
+        TASK_RECONCILE_CONTEXT
+      );
+
+      expect(firstChanged).toBe(0);
+      expect(service.get('coder-1')?.status).toBe('busy');
+
+      vi.setSystemTime(new Date('2026-02-28T12:01:16.000Z'));
       const changed = service.reconcileFromTasks(
         [
           {
