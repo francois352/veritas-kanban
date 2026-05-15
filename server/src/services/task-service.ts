@@ -4,6 +4,7 @@ import path from 'path';
 import matter from 'gray-matter';
 import { nanoid } from 'nanoid';
 import type {
+  Comment,
   Task,
   CreateTaskInput,
   UpdateTaskInput,
@@ -502,6 +503,7 @@ export class TaskService {
           title: task.title,
           status: task.status,
           agent: task.agent,
+          updated: task.updated,
         })),
         TASK_RECONCILE_CONTEXT
       );
@@ -517,6 +519,11 @@ export class TaskService {
   async listTasks(): Promise<Task[]> {
     await this.initCache();
     return this.cacheList();
+  }
+
+  async listInProgressTasks(): Promise<Task[]> {
+    const tasks = await this.listTasks();
+    return tasks.filter((task) => task.status === 'in-progress');
   }
 
   /**
@@ -925,6 +932,56 @@ export class TaskService {
           log.warn({ taskId: updatedTask.id }, 'Post-transition actions failed: %s', err);
         });
       }
+    });
+
+    return updatedTask;
+  }
+
+  async appendComment(
+    id: string,
+    comment: Comment,
+    options: { touchUpdated?: boolean } = {}
+  ): Promise<Task | null> {
+    if (!isValidTaskId(id)) return null;
+
+    const task = await this.getTask(id);
+    if (!task) return null;
+
+    const initialFilename = (await this.findTaskFile(this.tasksDir, id)) ?? this.taskToFilename(task);
+    const filepath = path.join(this.tasksDir, initialFilename);
+    let updatedTask!: Task;
+
+    await withFileLock(filepath, async () => {
+      const content = await fs.readFile(filepath, 'utf-8');
+      const parsed = matter(content);
+      const freshTask = this.parseTaskFile(content, initialFilename);
+      if (!freshTask || freshTask.id !== id) {
+        throw new Error(`Unable to parse task before appending comment: ${id}`);
+      }
+
+      const data = this.deepCleanUndefined(parsed.data as Record<string, any>);
+      const existingComments = Array.isArray(data.comments) ? data.comments : [];
+      data.comments = [...existingComments, comment];
+      if (options.touchUpdated !== false) {
+        data.updated = new Date().toISOString();
+      }
+
+      const updatedContent = matter.stringify(parsed.content, data);
+      const parsedUpdatedTask = this.parseTaskFile(updatedContent, initialFilename);
+      if (!parsedUpdatedTask) {
+        throw new Error(`Unable to parse task after appending comment: ${id}`);
+      }
+      updatedTask = parsedUpdatedTask;
+      const tmpPath = `${filepath}.tmp.${process.pid}.${Date.now()}`;
+      this.markWrite();
+      try {
+        await fs.writeFile(tmpPath, updatedContent, 'utf-8');
+        await fs.rename(tmpPath, filepath);
+      } catch (error) {
+        await fs.unlink(tmpPath).catch(() => {});
+        throw error;
+      }
+      this.cache.set(updatedTask.id, updatedTask);
     });
 
     return updatedTask;

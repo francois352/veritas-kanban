@@ -589,6 +589,138 @@ describe('AgentRegistryService', () => {
       expect(agent?.currentTaskId).toBe('task_20260228_syncA');
     });
 
+    it('should prefer the newest in-progress task when one agent has multiple open tasks', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      const changed = service.reconcileFromTasks(
+        [
+          {
+            id: 'task_20260228_old',
+            title: 'Older in-progress task',
+            status: 'in-progress',
+            agent: 'coder-1',
+            updated: '2026-02-28T12:00:00.000Z',
+          },
+          {
+            id: 'task_20260228_new',
+            title: 'Newer in-progress task',
+            status: 'in-progress',
+            agent: 'coder-1',
+            updated: '2026-02-28T12:30:00.000Z',
+          },
+        ],
+        TASK_RECONCILE_CONTEXT
+      );
+
+      const agent = service.get('coder-1');
+      expect(changed).toBe(1);
+      expect(agent?.status).toBe('busy');
+      expect(agent?.currentTaskId).toBe('task_20260228_new');
+      expect(agent?.currentTaskTitle).toBe('Newer in-progress task');
+    });
+
+    it('should ignore future-dated task updates when choosing the active task', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-28T12:45:00.000Z'));
+
+      const changed = service.reconcileFromTasks(
+        [
+          {
+            id: 'task_20260228_current',
+            title: 'Current in-progress task',
+            status: 'in-progress',
+            agent: 'coder-1',
+            updated: '2026-02-28T12:30:00.000Z',
+          },
+          {
+            id: 'task_20260228_future',
+            title: 'Future-dated in-progress task',
+            status: 'in-progress',
+            agent: 'coder-1',
+            updated: '2099-01-01T00:00:00.000Z',
+          },
+        ],
+        TASK_RECONCILE_CONTEXT
+      );
+
+      const agent = service.get('coder-1');
+      expect(changed).toBe(1);
+      expect(agent?.currentTaskId).toBe('task_20260228_current');
+
+      vi.useRealTimers();
+    });
+
+    it('should allow small clock skew without letting future timestamps dominate', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-28T12:45:00.000Z'));
+
+      const changed = service.reconcileFromTasks(
+        [
+          {
+            id: 'task_20260228_old',
+            title: 'Older in-progress task',
+            status: 'in-progress',
+            agent: 'coder-1',
+            updated: '2026-02-28T12:44:00.000Z',
+          },
+          {
+            id: 'task_20260228_skew',
+            title: 'Slightly future in-progress task',
+            status: 'in-progress',
+            agent: 'coder-1',
+            updated: '2026-02-28T12:45:01.000Z',
+          },
+        ],
+        TASK_RECONCILE_CONTEXT
+      );
+
+      const agent = service.get('coder-1');
+      expect(changed).toBe(1);
+      expect(agent?.currentTaskId).toBe('task_20260228_skew');
+
+      vi.useRealTimers();
+    });
+
+    it('should keep the first active task when timestamps tie', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-28T12:45:00.000Z'));
+
+      service.reconcileFromTasks(
+        [
+          {
+            id: 'task_20260228_first',
+            title: 'First in-progress task',
+            status: 'in-progress',
+            agent: 'coder-1',
+            updated: '2026-02-28T12:44:00.000Z',
+          },
+          {
+            id: 'task_20260228_second',
+            title: 'Second in-progress task',
+            status: 'in-progress',
+            agent: 'coder-1',
+            updated: '2026-02-28T12:44:00.000Z',
+          },
+        ],
+        TASK_RECONCILE_CONTEXT
+      );
+
+      const agent = service.get('coder-1');
+      expect(agent?.currentTaskId).toBe('task_20260228_first');
+
+      vi.useRealTimers();
+    });
+
     it('should clear busy agent when assigned task is terminal', () => {
       const service = getAgentRegistryService();
       service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
@@ -623,6 +755,114 @@ describe('AgentRegistryService', () => {
       expect(agent?.currentTaskId).toBeUndefined();
 
       vi.useRealTimers();
+    });
+
+    it('should clear busy agent when current task is missing from the active snapshot', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-28T12:00:00.000Z'));
+
+      service.syncFromTask(
+        {
+          agentRef: 'coder-1',
+          taskId: 'task_20260228_archived',
+          taskStatus: 'in-progress',
+        },
+        TASK_SYNC_CONTEXT
+      );
+
+      vi.setSystemTime(new Date('2026-02-28T12:00:15.000Z'));
+      const firstChanged = service.reconcileFromTasks(
+        [
+          {
+            id: 'task_20260228_other',
+            status: 'todo',
+            agent: 'coder-1',
+          },
+        ],
+        TASK_RECONCILE_CONTEXT
+      );
+
+      expect(firstChanged).toBe(0);
+      expect(service.get('coder-1')?.status).toBe('busy');
+
+      vi.setSystemTime(new Date('2026-02-28T12:01:16.000Z'));
+      const changed = service.reconcileFromTasks(
+        [
+          {
+            id: 'task_20260228_other',
+            status: 'todo',
+            agent: 'coder-1',
+          },
+        ],
+        TASK_RECONCILE_CONTEXT
+      );
+
+      const agent = service.get('coder-1');
+      expect(changed).toBe(1);
+      expect(agent?.status).toBe('idle');
+      expect(agent?.currentTaskId).toBeUndefined();
+      expect(agent?.currentTaskTitle).toBeUndefined();
+
+      vi.useRealTimers();
+    });
+
+    it('should not clear busy agent when current task is missing inside the flap guard', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-02-28T12:00:00.000Z'));
+
+      service.syncFromTask(
+        {
+          agentRef: 'coder-1',
+          taskId: 'task_20260228_new',
+          taskStatus: 'in-progress',
+        },
+        TASK_SYNC_CONTEXT
+      );
+
+      const changed = service.reconcileFromTasks(
+        [
+          {
+            id: 'task_20260228_other',
+            status: 'todo',
+            agent: 'other-agent',
+          },
+        ],
+        TASK_RECONCILE_CONTEXT
+      );
+
+      const agent = service.get('coder-1');
+      expect(changed).toBe(0);
+      expect(agent?.status).toBe('busy');
+      expect(agent?.currentTaskId).toBe('task_20260228_new');
+
+      vi.useRealTimers();
+    });
+
+    it('should not clear busy agent when reconciliation receives an empty snapshot', () => {
+      const service = getAgentRegistryService();
+      service.register({ id: 'coder-1', name: 'Coder 1', capabilities: [{ name: 'code' }] });
+
+      service.syncFromTask(
+        {
+          agentRef: 'coder-1',
+          taskId: 'task_20260228_current',
+          taskStatus: 'in-progress',
+        },
+        TASK_SYNC_CONTEXT
+      );
+
+      const changed = service.reconcileFromTasks([], TASK_RECONCILE_CONTEXT);
+
+      const agent = service.get('coder-1');
+      expect(changed).toBe(0);
+      expect(agent?.status).toBe('busy');
+      expect(agent?.currentTaskId).toBe('task_20260228_current');
     });
 
     it('should reject unauthorized reconcile context', () => {

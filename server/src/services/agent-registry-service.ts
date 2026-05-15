@@ -115,6 +115,7 @@ export interface TaskSyncSnapshot {
   title?: string;
   status: 'todo' | 'in-progress' | 'blocked' | 'done' | 'cancelled';
   agent?: string;
+  updated?: string;
 }
 
 // ─── Configuration ───────────────────────────────────────────────
@@ -127,6 +128,8 @@ const STALE_CHECK_INTERVAL_MS = 60 * 1000; // 1 minute
 
 /** Prevent rapid busy<->idle oscillation on quick status churn */
 const DEFAULT_TASK_SYNC_FLAP_GUARD_MS = 10 * 1000; // 10 seconds
+const MISSING_TASK_CLEAR_GRACE_MS = 60 * 1000; // 1 minute
+const MAX_RECONCILE_ABSURD_FUTURE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function getTaskSyncFlapGuardMs(): number {
   const raw = process.env.VERITAS_TASK_SYNC_FLAP_GUARD_MS;
@@ -159,6 +162,8 @@ class AgentRegistryService {
   private legacyFilePath: string;
   private staleCheckInterval: ReturnType<typeof setInterval> | null = null;
   private lastBusyAtByAgent: Map<string, number> = new Map();
+  private missingTaskSeenAtByAgent: Map<string, number> = new Map();
+  private missingTaskMissesByAgent: Map<string, number> = new Map();
   private taskSyncFlapGuardMs: number;
 
   constructor() {
@@ -304,6 +309,7 @@ class AgentRegistryService {
     }
 
     const byAgentRef = new Map<string, TaskSyncSnapshot>();
+    const tasksById = new Map(tasks.map((task) => [task.id, task]));
 
     for (const task of tasks) {
       if (!task.agent) continue;
@@ -317,13 +323,16 @@ class AgentRegistryService {
       const key = task.agent.trim().toLowerCase();
       const existing = byAgentRef.get(key);
 
-      // Authoritative precedence: in-progress wins
-      if (!existing || task.status === 'in-progress') {
+      // Authoritative precedence: in-progress wins; when an agent has several
+      // in-progress tasks, use the most recently updated one as the active task.
+      if (!existing || this.shouldPreferTaskSyncCandidate(task, existing)) {
         byAgentRef.set(key, task);
       }
     }
 
     let changed = 0;
+    let directRegistryChanged = false;
+    const snapshotHasTasks = tasks.length > 0;
 
     for (const agent of this.agents.values()) {
       const mapped =
@@ -331,6 +340,8 @@ class AgentRegistryService {
         byAgentRef.get(agent.name.trim().toLowerCase());
 
       if (mapped?.status === 'in-progress') {
+        this.missingTaskSeenAtByAgent.delete(agent.id);
+        this.missingTaskMissesByAgent.delete(agent.id);
         const prevStatus = agent.status;
         const prevTaskId = agent.currentTaskId;
         const updated = this.syncFromTask(
@@ -344,12 +355,47 @@ class AgentRegistryService {
         );
         if (updated && (updated.currentTaskId !== prevTaskId || updated.status !== prevStatus)) {
           changed++;
+          directRegistryChanged = true;
         }
         continue;
       }
 
       if (agent.status === 'busy' && agent.currentTaskId) {
-        const task = tasks.find((t) => t.id === agent.currentTaskId);
+        const task = tasksById.get(agent.currentTaskId);
+        if (!task && snapshotHasTasks && mapped) {
+          const nowMs = Date.now();
+          const lastBusyAt = this.lastBusyAtByAgent.get(agent.id);
+          const firstMissingAt = this.missingTaskSeenAtByAgent.get(agent.id);
+          const missingCount = (this.missingTaskMissesByAgent.get(agent.id) ?? 0) + 1;
+          this.missingTaskMissesByAgent.set(agent.id, missingCount);
+          if (!firstMissingAt) {
+            this.missingTaskSeenAtByAgent.set(agent.id, nowMs);
+            continue;
+          }
+          if (
+            missingCount < 2 ||
+            (lastBusyAt && nowMs - lastBusyAt < this.taskSyncFlapGuardMs) ||
+            nowMs - firstMissingAt < MISSING_TASK_CLEAR_GRACE_MS
+          ) {
+            continue;
+          }
+
+          agent.status = 'idle';
+          agent.currentTaskId = undefined;
+          agent.currentTaskTitle = undefined;
+          this.agents.set(agent.id, agent);
+          this.missingTaskSeenAtByAgent.delete(agent.id);
+          this.missingTaskMissesByAgent.delete(agent.id);
+          changed++;
+          directRegistryChanged = true;
+          continue;
+        }
+
+        if (task) {
+          this.missingTaskSeenAtByAgent.delete(agent.id);
+          this.missingTaskMissesByAgent.delete(agent.id);
+        }
+
         if (task && task.status !== 'in-progress') {
           const prevStatus = agent.status;
           const prevTaskId = agent.currentTaskId;
@@ -363,9 +409,14 @@ class AgentRegistryService {
           );
           if (updated && (updated.status !== prevStatus || updated.currentTaskId !== prevTaskId)) {
             changed++;
+            directRegistryChanged = true;
           }
         }
       }
+    }
+
+    if (directRegistryChanged) {
+      this.persist();
     }
 
     return changed;
@@ -377,6 +428,8 @@ class AgentRegistryService {
   deregister(agentId: string): boolean {
     const existed = this.agents.delete(agentId);
     this.lastBusyAtByAgent.delete(agentId);
+    this.missingTaskSeenAtByAgent.delete(agentId);
+    this.missingTaskMissesByAgent.delete(agentId);
     if (existed) {
       this.persist();
       log.info({ agentId }, `Agent deregistered: ${agentId}`);
@@ -453,6 +506,27 @@ class AgentRegistryService {
     if (isValidSyncToken(context)) return true;
     // Reject: string-only contexts are no longer accepted
     return false;
+  }
+
+  private shouldPreferTaskSyncCandidate(
+    candidate: TaskSyncSnapshot,
+    existing: TaskSyncSnapshot
+  ): boolean {
+    if (candidate.status === 'in-progress' && existing.status !== 'in-progress') return true;
+    if (candidate.status !== 'in-progress' && existing.status === 'in-progress') return false;
+    if (candidate.status === 'in-progress' && existing.status === 'in-progress') {
+      return this.getTaskUpdatedMillis(candidate) > this.getTaskUpdatedMillis(existing);
+    }
+    return false;
+  }
+
+  private getTaskUpdatedMillis(task: TaskSyncSnapshot): number {
+    if (!task.updated) return 0;
+    const parsed = new Date(task.updated).getTime();
+    if (!Number.isFinite(parsed)) return 0;
+    const nowMs = Date.now();
+    if (parsed > nowMs + MAX_RECONCILE_ABSURD_FUTURE_MS) return 0;
+    return Math.min(parsed, nowMs);
   }
 
   private isValidAgentRef(agentRef: string): boolean {
