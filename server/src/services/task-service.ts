@@ -932,7 +932,13 @@ export class TaskService {
     return updatedTask;
   }
 
-  async appendComment(id: string, comment: Comment): Promise<Task | null> {
+  async appendComment(
+    id: string,
+    comment: Comment,
+    options: { touchUpdated?: boolean } = {}
+  ): Promise<Task | null> {
+    if (!isValidTaskId(id)) return null;
+
     const task = await this.getTask(id);
     if (!task) return null;
 
@@ -950,7 +956,7 @@ export class TaskService {
       updatedTask = {
         ...freshTask,
         comments: [...(freshTask.comments ?? []), comment],
-        updated: new Date().toISOString(),
+        updated: options.touchUpdated === false ? freshTask.updated : new Date().toISOString(),
       };
 
       const updatedContent = this.taskToMarkdown(updatedTask);

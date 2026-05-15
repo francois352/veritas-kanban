@@ -42,16 +42,22 @@ function makeService(tasks: Task[], agents: RegisteredAgent[]) {
   const taskService = {
     listTasks: vi.fn(async () => tasks),
     getTask: vi.fn(async (id: string) => tasks.find((task) => task.id === id) ?? null),
-    appendComment: vi.fn(async (id: string, comment: NonNullable<Task['comments']>[number]) => {
-      const index = tasks.findIndex((task) => task.id === id);
-      if (index === -1) return null;
-      tasks[index] = {
-        ...tasks[index],
-        comments: [...(tasks[index].comments ?? []), comment],
-        updated: new Date().toISOString(),
-      } as Task;
-      return tasks[index];
-    }),
+    appendComment: vi.fn(
+      async (
+        id: string,
+        comment: NonNullable<Task['comments']>[number],
+        options: { touchUpdated?: boolean } = {}
+      ) => {
+        const index = tasks.findIndex((task) => task.id === id);
+        if (index === -1) return null;
+        tasks[index] = {
+          ...tasks[index],
+          comments: [...(tasks[index].comments ?? []), comment],
+          updated: options.touchUpdated === false ? tasks[index].updated : new Date().toISOString(),
+        } as Task;
+        return tasks[index];
+      }
+    ),
   };
   const agentRegistry = {
     list: vi.fn(() => agents),
@@ -125,6 +131,40 @@ describe('StaleTaskWatchdogService', () => {
     expect(report.findings).toHaveLength(0);
   });
 
+  it('prioritizes exact agent IDs over colliding agent display names', async () => {
+    const { service } = makeService(
+      [
+        makeTask({
+          updated: '2026-05-15T00:40:00.000Z',
+          agent: 'codex',
+        }),
+      ],
+      [
+        makeAgent({
+          id: 'codex',
+          name: 'Codex Primary',
+        }),
+        makeAgent({
+          id: 'other-agent',
+          name: 'codex',
+          status: 'offline',
+          lastHeartbeat: '2026-05-15T00:10:00.000Z',
+          currentTaskId: 'task_20260515_other',
+        }),
+      ]
+    );
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-05-15T00:45:00.000Z'));
+    const report = await service.report({
+      taskThresholdMinutes: 30,
+      heartbeatThresholdMinutes: 10,
+    });
+    vi.useRealTimers();
+
+    expect(report.findings).toHaveLength(0);
+  });
+
   it('posts one watchdog comment and throttles repeat comments', async () => {
     const tasks = [
       makeTask({
@@ -161,7 +201,13 @@ describe('StaleTaskWatchdogService', () => {
     expect(first.commentsPosted).toBe(1);
     expect(second.commentsPosted).toBe(0);
     expect(taskService.appendComment).toHaveBeenCalledTimes(1);
+    expect(taskService.appendComment).toHaveBeenCalledWith(
+      'task_20260515_watch',
+      expect.objectContaining({ author: 'veritas-watchdog' }),
+      { touchUpdated: false }
+    );
     expect(tasks[0].comments).toHaveLength(1);
+    expect(tasks[0].updated).toBe('2026-05-15T00:00:00.000Z');
     expect(tasks[0].comments?.[0].author).toBe('veritas-watchdog');
     expect(tasks[0].comments?.[0].text).toContain('STALE CHECK:');
   });
@@ -299,6 +345,67 @@ describe('StaleTaskWatchdogService', () => {
     expect(taskService.appendComment).not.toHaveBeenCalled();
   });
 
+  it('caps requested comments per run at the server configured limit', async () => {
+    const previousMaxComments = process.env.VERITAS_STALE_TASK_WATCHDOG_MAX_COMMENTS;
+    process.env.VERITAS_STALE_TASK_WATCHDOG_MAX_COMMENTS = '1';
+    const tasks = [
+      makeTask({
+        id: 'task_20260515_first',
+        updated: '2026-05-15T00:00:00.000Z',
+        agent: 'codex',
+        comments: [],
+      }),
+      makeTask({
+        id: 'task_20260515_second',
+        updated: '2026-05-15T00:10:00.000Z',
+        agent: 'claude',
+        comments: [],
+      }),
+    ];
+    const { service, taskService } = makeService(
+      tasks,
+      [
+        makeAgent({
+          id: 'codex',
+          name: 'Codex',
+          status: 'offline',
+          lastHeartbeat: '2026-05-15T00:10:00.000Z',
+          currentTaskId: 'task_20260515_first',
+        }),
+        makeAgent({
+          id: 'claude',
+          name: 'Claude',
+          status: 'offline',
+          lastHeartbeat: '2026-05-15T00:10:00.000Z',
+          currentTaskId: 'task_20260515_second',
+        }),
+      ]
+    );
+
+    try {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-05-15T00:45:00.000Z'));
+      const result = await service.run({
+        postComments: true,
+        taskThresholdMinutes: 30,
+        heartbeatThresholdMinutes: 10,
+        commentThrottleMinutes: 30,
+        maxCommentsPerRun: 10,
+      });
+      vi.useRealTimers();
+
+      expect(result.commentsPosted).toBe(1);
+      expect(taskService.appendComment).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+      if (previousMaxComments === undefined) {
+        delete process.env.VERITAS_STALE_TASK_WATCHDOG_MAX_COMMENTS;
+      } else {
+        process.env.VERITAS_STALE_TASK_WATCHDOG_MAX_COMMENTS = previousMaxComments;
+      }
+    }
+  });
+
   it('continues posting later findings when one comment append fails', async () => {
     const tasks = [
       makeTask({
@@ -334,7 +441,7 @@ describe('StaleTaskWatchdogService', () => {
       ]
     );
     let appendCalls = 0;
-    taskService.appendComment.mockImplementation(async (id, comment) => {
+    taskService.appendComment.mockImplementation(async (id, comment, options = {}) => {
       appendCalls++;
       if (appendCalls === 1) {
         throw new Error('disk unavailable');
@@ -344,7 +451,7 @@ describe('StaleTaskWatchdogService', () => {
       tasks[index] = {
         ...tasks[index],
         comments: [...(tasks[index].comments ?? []), comment],
-        updated: new Date().toISOString(),
+        updated: options.touchUpdated === false ? tasks[index].updated : new Date().toISOString(),
       } as Task;
       return tasks[index];
     });

@@ -220,12 +220,12 @@ export class StaleTaskWatchdogService {
       return { ...report, commentsPosted };
     }
 
-    const maxComments =
-      options.maxCommentsPerRun ??
-      parsePositiveInt(
-        process.env.VERITAS_STALE_TASK_WATCHDOG_MAX_COMMENTS,
-        DEFAULT_MAX_COMMENTS_PER_RUN
-      );
+    const configuredMaxComments = parsePositiveInt(
+      process.env.VERITAS_STALE_TASK_WATCHDOG_MAX_COMMENTS,
+      DEFAULT_MAX_COMMENTS_PER_RUN
+    );
+    const requestedMaxComments = options.maxCommentsPerRun ?? configuredMaxComments;
+    const maxComments = Math.min(requestedMaxComments, configuredMaxComments);
     const throttleMinutes =
       options.commentThrottleMinutes ??
       parsePositiveInt(
@@ -259,9 +259,13 @@ export class StaleTaskWatchdogService {
   private indexAgents(agents: RegisteredAgent[]): Map<string, RegisteredAgent> {
     const index = new Map<string, RegisteredAgent>();
     for (const agent of agents) {
-      for (const key of [agent.id, agent.name, slugRef(agent.name)]) {
+      const normalized = normalizeRef(agent.id);
+      if (normalized) index.set(normalized, agent);
+    }
+    for (const agent of agents) {
+      for (const key of [agent.name, slugRef(agent.name)]) {
         const normalized = normalizeRef(key);
-        if (normalized) index.set(normalized, agent);
+        if (normalized && !index.has(normalized)) index.set(normalized, agent);
       }
     }
     return index;
@@ -417,19 +421,21 @@ export class StaleTaskWatchdogService {
       timestamp: new Date(nowMs).toISOString(),
     };
 
+    this.commentThrottleByTask.set(task.id, nowMs);
     let updated: Task | null = null;
     try {
-      updated = await this.taskService.appendComment(task.id, comment);
+      updated = await this.taskService.appendComment(task.id, comment, { touchUpdated: false });
     } catch (err) {
+      this.commentThrottleByTask.delete(task.id);
       log.warn({ err, taskId: task.id }, 'Stale task watchdog comment append failed');
       return false;
     }
     if (!updated) {
+      this.commentThrottleByTask.delete(task.id);
       log.warn({ taskId: task.id }, 'Stale task watchdog failed to persist comment');
       return false;
     }
 
-    this.commentThrottleByTask.set(task.id, nowMs);
     broadcastTaskChange('updated', task.id);
     return true;
   }
