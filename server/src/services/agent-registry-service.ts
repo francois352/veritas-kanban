@@ -353,6 +353,7 @@ class AgentRegistryService {
         );
         if (updated && (updated.currentTaskId !== prevTaskId || updated.status !== prevStatus)) {
           changed++;
+          directRegistryChanged = true;
         }
         continue;
       }
@@ -401,6 +402,7 @@ class AgentRegistryService {
           );
           if (updated && (updated.status !== prevStatus || updated.currentTaskId !== prevTaskId)) {
             changed++;
+            directRegistryChanged = true;
           }
         }
       }
