@@ -953,18 +953,25 @@ export class TaskService {
 
     await withFileLock(filepath, async () => {
       const content = await fs.readFile(filepath, 'utf-8');
+      const parsed = matter(content);
       const freshTask = this.parseTaskFile(content, initialFilename);
-      if (!freshTask) {
+      if (!freshTask || freshTask.id !== id) {
         throw new Error(`Unable to parse task before appending comment: ${id}`);
       }
 
-      updatedTask = {
-        ...freshTask,
-        comments: [...(freshTask.comments ?? []), comment],
-        updated: options.touchUpdated === false ? freshTask.updated : new Date().toISOString(),
-      };
+      const data = this.deepCleanUndefined(parsed.data as Record<string, any>);
+      const existingComments = Array.isArray(data.comments) ? data.comments : [];
+      data.comments = [...existingComments, comment];
+      if (options.touchUpdated !== false) {
+        data.updated = new Date().toISOString();
+      }
 
-      const updatedContent = this.taskToMarkdown(updatedTask);
+      const updatedContent = matter.stringify(parsed.content, data);
+      const parsedUpdatedTask = this.parseTaskFile(updatedContent, initialFilename);
+      if (!parsedUpdatedTask) {
+        throw new Error(`Unable to parse task after appending comment: ${id}`);
+      }
+      updatedTask = parsedUpdatedTask;
       const tmpPath = `${filepath}.tmp.${process.pid}.${Date.now()}`;
       this.markWrite();
       try {
