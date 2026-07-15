@@ -8,7 +8,12 @@ import { TELEMETRY_DIR } from './helpers.js';
 import { computeTaskMetrics, computeVelocityMetrics } from './task-metrics.js';
 import { computeRunMetrics, computeDurationMetrics, computeFailedRuns } from './run-metrics.js';
 import { computeTokenMetrics, computeBudgetMetrics } from './token-metrics.js';
-import { computeAllMetrics, computeTrends, computeAgentComparison, computeUtilization } from './dashboard-metrics.js';
+import {
+  computeAllMetrics,
+  computeTrends,
+  computeAgentComparison,
+  computeUtilization,
+} from './dashboard-metrics.js';
 import type {
   MetricsPeriod,
   TaskMetrics,
@@ -21,11 +26,31 @@ import type {
   AgentComparisonResult,
   VelocityMetrics,
   FailedRunDetails,
+  TaskCostMetrics,
 } from './types.js';
+
+type AllMetricsResult = {
+  tasks: TaskMetrics;
+  runs: RunMetrics;
+  tokens: TokenMetrics;
+  duration: DurationMetrics;
+  trends: TrendComparison;
+};
+
+interface MetricsCacheEntry<T> {
+  expiresAt: number;
+  value: Promise<T>;
+}
 
 export class MetricsService {
   private taskService: TaskService;
   private telemetryDir: string;
+  // Dashboard polls can otherwise recompute the full telemetry/task snapshot repeatedly.
+  // The tradeoff is bounded, intentional staleness for at most this TTL.
+  private readonly cacheTtlMs = 10_000;
+  private readonly maxCacheEntries = 50;
+  private allMetricsCache = new Map<string, MetricsCacheEntry<AllMetricsResult>>();
+  private taskCostCache = new Map<string, MetricsCacheEntry<TaskCostMetrics>>();
 
   constructor(telemetryDir?: string) {
     // Keep TelemetryService init for potential future use
@@ -70,14 +95,10 @@ export class MetricsService {
     project?: string,
     from?: string,
     to?: string
-  ): Promise<{
-    tasks: TaskMetrics;
-    runs: RunMetrics;
-    tokens: TokenMetrics;
-    duration: DurationMetrics;
-    trends: TrendComparison;
-  }> {
-    return computeAllMetrics(this.taskService, this.telemetryDir, period, project, from, to);
+  ): Promise<AllMetricsResult> {
+    return this.getCached(this.allMetricsCache, this.cacheKey(period, project, from, to), () =>
+      computeAllMetrics(this.taskService, this.telemetryDir, period, project, from, to)
+    );
   }
 
   async getTrends(
@@ -121,16 +142,18 @@ export class MetricsService {
     project?: string,
     from?: string,
     to?: string
-  ): Promise<import('./types.js').TaskCostMetrics> {
+  ): Promise<TaskCostMetrics> {
     const { computeTaskCost } = await import('./dashboard-metrics.js');
-    return computeTaskCost(this.telemetryDir, this.taskService, period, project, from, to);
+    return this.getCached(this.taskCostCache, this.cacheKey(period, project, from, to), () =>
+      computeTaskCost(this.telemetryDir, this.taskService, period, project, from, to)
+    );
   }
 
   async getUtilization(
     period: MetricsPeriod,
     from?: string,
     to?: string,
-    utcOffsetHours?: number,
+    utcOffsetHours?: number
   ): Promise<import('./types.js').UtilizationMetrics> {
     // Use telemetry-based computation (reliable data source)
     return computeUtilization(this.telemetryDir, period, from, to, utcOffsetHours);
@@ -144,6 +167,39 @@ export class MetricsService {
     to?: string
   ): Promise<FailedRunDetails[]> {
     return computeFailedRuns(this.telemetryDir, period, project, limit);
+  }
+
+  private cacheKey(...parts: Array<string | undefined>): string {
+    return JSON.stringify(parts.map((part) => part ?? null));
+  }
+
+  private getCached<T>(
+    cache: Map<string, MetricsCacheEntry<T>>,
+    key: string,
+    loader: () => Promise<T>
+  ): Promise<T> {
+    const now = Date.now();
+    const cached = cache.get(key);
+    if (cached && cached.expiresAt > now) {
+      return cached.value;
+    }
+
+    const value = loader().catch((error) => {
+      cache.delete(key);
+      throw error;
+    });
+
+    cache.set(key, {
+      expiresAt: now + this.cacheTtlMs,
+      value,
+    });
+
+    if (cache.size > this.maxCacheEntries) {
+      const oldestKey = cache.keys().next().value;
+      if (oldestKey) cache.delete(oldestKey);
+    }
+
+    return value;
   }
 }
 

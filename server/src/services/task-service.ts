@@ -2,6 +2,7 @@ import fs from 'fs/promises';
 import { watch, type FSWatcher } from '../storage/fs-helpers.js';
 import path from 'path';
 import matter from 'gray-matter';
+import yaml from 'yaml';
 import { nanoid } from 'nanoid';
 import type {
   Task,
@@ -13,6 +14,7 @@ import type {
   TimeTracking,
   RunStartedEvent,
   RunCompletedEvent,
+  BlockedCategory,
 } from '@veritas-kanban/shared';
 import { getTelemetryService, type TelemetryService } from './telemetry-service.js';
 import { ConfigService } from './config-service.js';
@@ -66,11 +68,56 @@ function makeSlug(text: string): string {
 // and local dev all agree on where tasks live.
 const DEFAULT_TASKS_DIR = getTasksActiveDir();
 const DEFAULT_ARCHIVE_DIR = getTasksArchiveDir();
+const TASK_SUMMARY_FRONTMATTER_KEYS = new Set([
+  'id',
+  'title',
+  'type',
+  'status',
+  'priority',
+  'project',
+  'sprint',
+  'agent',
+  'created',
+  'updated',
+]);
+const TASK_STATUSES: ReadonlySet<Task['status']> = new Set([
+  'todo',
+  'in-progress',
+  'blocked',
+  'done',
+  'cancelled',
+]);
+const TASK_PRIORITIES: ReadonlySet<Task['priority']> = new Set([
+  'low',
+  'medium',
+  'high',
+  'critical',
+]);
+const BLOCKED_CATEGORIES: ReadonlySet<BlockedCategory> = new Set([
+  'waiting-on-feedback',
+  'technical-snag',
+  'prerequisite',
+  'other',
+]);
 
 export interface TaskServiceOptions {
   tasksDir?: string;
   archiveDir?: string;
   telemetryService?: TelemetryService;
+}
+
+export interface TaskMetricsSummary {
+  id: Task['id'];
+  title: Task['title'];
+  type: Task['type'];
+  status: Task['status'];
+  priority: Task['priority'];
+  project?: Task['project'];
+  sprint?: Task['sprint'];
+  agent?: Task['agent'];
+  created: Task['created'];
+  updated: Task['updated'];
+  blockedReason?: Pick<NonNullable<Task['blockedReason']>, 'category'>;
 }
 
 /** Ignore file-watcher events within this window after our own writes */
@@ -222,6 +269,24 @@ export class TaskService {
   private cacheList(): Task[] {
     const tasks = Array.from(this.cache.values());
     return tasks.sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime());
+  }
+
+  private taskToMetricsSummary(task: Task): TaskMetricsSummary {
+    return {
+      id: task.id,
+      title: task.title,
+      type: task.type,
+      status: task.status,
+      priority: task.priority,
+      project: task.project,
+      sprint: task.sprint,
+      agent: task.agent,
+      created: task.created,
+      updated: task.updated,
+      blockedReason: task.blockedReason?.category
+        ? { category: task.blockedReason.category }
+        : undefined,
+    };
   }
 
   /** Record that we are about to write — suppresses watcher for WRITE_DEBOUNCE_MS */
@@ -383,6 +448,156 @@ export class TaskService {
     return clean;
   }
 
+  private detachString(value: string): string {
+    return Buffer.from(value, 'utf8').toString('utf8');
+  }
+
+  private detachParsedStrings<T>(value: T, seen = new WeakMap<object, unknown>()): T {
+    if (typeof value === 'string') {
+      return this.detachString(value) as T;
+    }
+
+    if (value && typeof value === 'object') {
+      if (value instanceof Date || Buffer.isBuffer(value)) {
+        return value;
+      }
+
+      const cached = seen.get(value);
+      if (cached) {
+        return cached as T;
+      }
+
+      if (Array.isArray(value)) {
+        const detachedArray: unknown[] = [];
+        seen.set(value, detachedArray);
+        for (const item of value) {
+          detachedArray.push(this.detachParsedStrings(item, seen));
+        }
+        return detachedArray as T;
+      }
+
+      const detached: Record<string, unknown> = {};
+      seen.set(value, detached);
+      for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+        detached[key] = this.detachParsedStrings(nested, seen);
+      }
+      return detached as T;
+    }
+
+    return value;
+  }
+
+  private detachParsedScalar(value: unknown): string | undefined {
+    if (value === undefined || value === null) return undefined;
+    if (value instanceof Date) return this.detachString(value.toISOString());
+    if (typeof value === 'string') return this.detachString(value);
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return this.detachString(String(value));
+    }
+    return undefined;
+  }
+
+  private extractTaskSummaryFrontmatter(content: string): string | null {
+    if (!content.startsWith('---')) return null;
+
+    let cursor = content.startsWith('---\r\n') ? 5 : 4;
+    const lines: string[] = [];
+    let currentIncludedKey: string | null = null;
+    let foundClosingFence = false;
+
+    while (cursor < content.length) {
+      const nextLine = content.indexOf('\n', cursor);
+      const rawLine = nextLine === -1 ? content.slice(cursor) : content.slice(cursor, nextLine);
+      const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+      cursor = nextLine === -1 ? content.length : nextLine + 1;
+
+      if (line === '---') {
+        foundClosingFence = true;
+        break;
+      }
+
+      const topLevel = line.match(/^([A-Za-z][\w-]*):(?:\s*(.*))?$/);
+      if (topLevel) {
+        const key = topLevel[1];
+        currentIncludedKey = null;
+
+        if (TASK_SUMMARY_FRONTMATTER_KEYS.has(key)) {
+          lines.push(line);
+          currentIncludedKey = key;
+        } else if (key === 'blockedReason') {
+          lines.push(topLevel[2]?.trim() ? line : 'blockedReason:');
+          currentIncludedKey = key;
+        }
+        continue;
+      }
+
+      if (!/^\s+/.test(line)) {
+        currentIncludedKey = null;
+        continue;
+      }
+
+      if (!currentIncludedKey) continue;
+
+      if (currentIncludedKey === 'blockedReason') {
+        if (/^\s+category:/.test(line)) {
+          lines.push(line);
+        }
+        continue;
+      }
+
+      lines.push(line);
+    }
+
+    if (!foundClosingFence || lines.length === 0) return null;
+    return lines.join('\n');
+  }
+
+  private parseTaskMetricsSummary(content: string, filename: string): TaskMetricsSummary | null {
+    let data: Record<string, unknown> = {};
+    const summaryFrontmatter = this.extractTaskSummaryFrontmatter(content);
+    if (summaryFrontmatter) {
+      try {
+        data = (yaml.parse(summaryFrontmatter) as Record<string, unknown> | null) ?? {};
+      } catch (error) {
+        log.warn({ err: error, filename }, 'Failed to parse task summary frontmatter');
+      }
+    }
+
+    const id = this.detachParsedScalar(data.id) || this.detachString(filename.split('-')[0] || '');
+    if (!isValidTaskId(id)) {
+      log.warn({ filename, id }, 'Invalid task ID format');
+      return null;
+    }
+
+    const status = this.detachParsedScalar(data.status);
+    const priority = this.detachParsedScalar(data.priority);
+    const blockedReason = data.blockedReason as Record<string, unknown> | undefined;
+    const blockedCategory = this.detachParsedScalar(blockedReason?.category) as
+      | BlockedCategory
+      | undefined;
+
+    return {
+      id,
+      title: this.detachParsedScalar(data.title) || 'Untitled',
+      type: this.detachParsedScalar(data.type) || 'code',
+      status:
+        status && TASK_STATUSES.has(status as Task['status']) ? (status as Task['status']) : 'todo',
+      priority:
+        priority && TASK_PRIORITIES.has(priority as Task['priority'])
+          ? (priority as Task['priority'])
+          : 'medium',
+      project: this.detachParsedScalar(data.project),
+      sprint: this.detachParsedScalar(data.sprint),
+      agent: this.detachParsedScalar(data.agent) as Task['agent'],
+      created: this.detachParsedScalar(data.created) || new Date().toISOString(),
+      updated: this.detachParsedScalar(data.updated) || new Date().toISOString(),
+      blockedReason:
+        blockedCategory && BLOCKED_CATEGORIES.has(blockedCategory)
+          ? { category: blockedCategory }
+          : undefined,
+    };
+  }
+
   private taskToMarkdown(task: Task): string {
     const { description, reviewComments, ...rest } = task;
 
@@ -422,7 +637,7 @@ export class TaskService {
         return null;
       }
 
-      return {
+      const task: Task = {
         id,
         title: data.title || 'Untitled',
         description: cleanDescription.trim(),
@@ -458,6 +673,8 @@ export class TaskService {
         deliverables: data.deliverables,
         dependencies: data.dependencies,
       };
+
+      return this.detachParsedStrings(task);
     } catch (error) {
       log.error({ err: error, filename }, 'Failed to parse task file');
       return null;
@@ -517,6 +734,13 @@ export class TaskService {
   async listTasks(): Promise<Task[]> {
     await this.initCache();
     return this.cacheList();
+  }
+
+  async listTaskMetricsSummaries(): Promise<TaskMetricsSummary[]> {
+    await this.initCache();
+    return Array.from(this.cache.values())
+      .map((task) => this.taskToMetricsSummary(task))
+      .sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime());
   }
 
   /**
@@ -1038,6 +1262,28 @@ export class TaskService {
     return tasks.sort(
       (a: Task, b: Task) => new Date(b.updated).getTime() - new Date(a.updated).getTime()
     );
+  }
+
+  async listArchivedTaskMetricsSummaries(): Promise<TaskMetricsSummary[]> {
+    await this.ensureDirectories();
+
+    const files = await fs.readdir(this.archiveDir);
+    const mdFiles = files.filter((f) => f.endsWith('.md'));
+
+    const tasks: TaskMetricsSummary[] = [];
+
+    for (const filename of mdFiles) {
+      try {
+        const filepath = path.join(this.archiveDir, filename);
+        const content = await fs.readFile(filepath, 'utf-8');
+        const task = this.parseTaskMetricsSummary(content, filename);
+        if (task) tasks.push(task);
+      } catch (error) {
+        log.warn({ err: error, filename }, 'Failed to read archived task summary');
+      }
+    }
+
+    return tasks.sort((a, b) => new Date(b.updated).getTime() - new Date(a.updated).getTime());
   }
 
   async getArchivedTask(id: string): Promise<Task | null> {

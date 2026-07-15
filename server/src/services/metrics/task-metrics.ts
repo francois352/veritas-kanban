@@ -4,7 +4,7 @@
 import fs from 'fs/promises';
 import path from 'path';
 import type { TaskStatus, BlockedCategory } from '@veritas-kanban/shared';
-import { TaskService } from '../task-service.js';
+import { TaskService, type TaskMetricsSummary } from '../task-service.js';
 import { PROJECT_ROOT } from './helpers.js';
 import type {
   TaskMetrics,
@@ -25,13 +25,15 @@ export async function computeTaskMetrics(
   since?: string | null
 ): Promise<TaskMetrics> {
   const [activeTasks, archivedTasks] = await Promise.all([
-    taskService.listTasks(),
-    taskService.listArchivedTasks(),
+    taskService.listTaskMetricsSummaries(),
+    taskService.listArchivedTaskMetricsSummaries(),
   ]);
 
   // Filter by project if specified
-  let filteredActive = project ? activeTasks.filter((t) => t.project === project) : activeTasks;
-  let filteredArchived = project
+  let filteredActive: TaskMetricsSummary[] = project
+    ? activeTasks.filter((t) => t.project === project)
+    : activeTasks;
+  let filteredArchived: TaskMetricsSummary[] = project
     ? archivedTasks.filter((t) => t.project === project)
     : archivedTasks;
 
@@ -103,10 +105,10 @@ export async function computeVelocityMetrics(
   project?: string,
   limit = 10
 ): Promise<VelocityMetrics> {
-  // Get all tasks (active + archived) to calculate velocity
+  // Get all task summaries (active + archived) to calculate velocity without retaining bodies.
   const [activeTasks, archivedTasks] = await Promise.all([
-    taskService.listTasks(),
-    taskService.listArchivedTasks(),
+    taskService.listTaskMetricsSummaries(),
+    taskService.listArchivedTaskMetricsSummaries(),
   ]);
 
   // Load sprint labels from sprints.json for display
