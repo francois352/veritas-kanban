@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import matter from 'gray-matter';
 import { TaskService } from '../services/task-service.js';
 
 describe('TaskService', () => {
@@ -43,7 +44,7 @@ title: Test Task
 type: code
 status: todo
 priority: high
-project: test-project
+project: test-project # inline comments should parse like YAML
 sprint: US-900
 created: '2026-01-26T10:00:00.000Z'
 updated: '2026-01-26T10:00:00.000Z'
@@ -156,6 +157,254 @@ updated: '2026-01-26T10:00:00.000Z'
     it('should return empty array for empty directory', async () => {
       const tasks = await service.listTasks();
       expect(tasks).toEqual([]);
+    });
+
+    it('should detach cached strings from large source-file parents', async () => {
+      const retainedDescription = 'Small retained task description.';
+      const discardedBodyMarker = `discarded-parent-${Date.now()}`;
+      const largeDiscardedBody = `${'x'.repeat(512 * 1024)}${discardedBodyMarker}`;
+      const taskContent = `---
+id: task_20260126_detach
+title: Detached Strings
+type: code
+status: todo
+priority: medium
+created: '2026-01-26T10:00:00.000Z'
+updated: '2026-01-26T10:00:00.000Z'
+comments:
+  - id: comment_1
+    author: codex
+    content: cached comment body
+    timestamp: '2026-01-26T10:00:00.000Z'
+---
+${retainedDescription}
+
+## Review Comments
+
+${largeDiscardedBody}
+`;
+      await fs.writeFile(
+        path.join(tasksDir, 'task_20260126_detach-detached-strings.md'),
+        taskContent
+      );
+
+      const detachSpy = vi.spyOn(
+        service as unknown as { detachString: (value: string) => string },
+        'detachString'
+      );
+      const tasks = await service.listTasks();
+      const detachedInputs = detachSpy.mock.calls
+        .map(([value]) => value)
+        .filter((value): value is string => typeof value === 'string');
+      detachSpy.mockRestore();
+
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].description).toBe(retainedDescription);
+      expect(tasks[0].comments?.[0]?.content).toBe('cached comment body');
+
+      expect(detachedInputs).toContain(retainedDescription);
+      expect(detachedInputs).toContain('cached comment body');
+      expect(detachedInputs.some((value) => value.includes(discardedBodyMarker))).toBe(false);
+    });
+
+    it('should not overflow when detaching YAML anchors with cycles', async () => {
+      const taskContent = `---
+id: task_20260126_cycle
+title: Cyclic YAML
+type: code
+status: todo
+priority: medium
+created: '2026-01-26T10:00:00.000Z'
+updated: '2026-01-26T10:00:00.000Z'
+checkpoint:
+  step: 1
+  timestamp: '2026-01-26T10:00:00.000Z'
+  state: &state
+    label: cyclic
+    self: *state
+---
+Anchored checkpoint state.
+`;
+      await fs.writeFile(path.join(tasksDir, 'task_20260126_cycle-cyclic-yaml.md'), taskContent);
+
+      const tasks = await service.listTasks();
+
+      expect(tasks).toHaveLength(1);
+      expect(tasks[0].checkpoint?.state.label).toBe('cyclic');
+    });
+
+    it('should list metrics summaries without descriptions or comments', async () => {
+      const taskContent = `---
+id: task_20260126_summary
+title: Summary Task
+type: code
+status: blocked
+priority: high
+project: test-project
+agent: codex
+created: '2026-01-26T10:00:00.000Z'
+updated: '2026-01-26T11:00:00.000Z'
+blockedReason:
+  category: technical-snag
+comments:
+  - id: comment_1
+    author: codex
+    content: ${'large comment '.repeat(1000)}
+    timestamp: '2026-01-26T10:00:00.000Z'
+---
+${'large description '.repeat(1000)}
+`;
+      await fs.writeFile(path.join(tasksDir, 'task_20260126_summary-summary-task.md'), taskContent);
+      await fs.writeFile(
+        path.join(archiveDir, 'task_20260126_summary-archived-summary-task.md'),
+        taskContent.replace('task_20260126_summary', 'task_20260126_archivedsummary')
+      );
+      await fs.writeFile(
+        path.join(archiveDir, 'task_20260126_unterminated-unterminated.md'),
+        `---
+id: task_20260126_unterminated
+title: Unterminated
+status: done
+Body line that must not be scanned as frontmatter:
+status: done
+`
+      );
+      await fs.writeFile(
+        path.join(archiveDir, 'task_20260126_flowblocked-flow-blocked.md'),
+        `---
+id: task_20260126_flowblocked
+title: Flow Blocked
+type: code
+status: blocked
+priority: medium
+created: '2026-01-26T10:00:00.000Z'
+updated: '2026-01-26T10:00:00.000Z'
+blockedReason: { category: prerequisite }
+---
+Flow-style blocked reason.
+`
+      );
+
+      const [activeSummary] = await service.listTaskMetricsSummaries();
+      const archivedSummaries = await service.listArchivedTaskMetricsSummaries();
+      const archivedSummary = archivedSummaries.find(
+        (task) => task.id === 'task_20260126_archivedsummary'
+      );
+      const unterminatedSummary = archivedSummaries.find(
+        (task) => task.id === 'task_20260126_unterminated'
+      );
+      const flowBlockedSummary = archivedSummaries.find(
+        (task) => task.id === 'task_20260126_flowblocked'
+      );
+
+      expect(activeSummary).toMatchObject({
+        id: 'task_20260126_summary',
+        title: 'Summary Task',
+        status: 'blocked',
+        priority: 'high',
+        project: 'test-project',
+        agent: 'codex',
+        blockedReason: { category: 'technical-snag' },
+      });
+      expect(archivedSummary).toMatchObject({
+        id: 'task_20260126_archivedsummary',
+        title: 'Summary Task',
+        status: 'blocked',
+        project: 'test-project',
+      });
+      expect(unterminatedSummary).toMatchObject({
+        id: 'task_20260126_unterminated',
+        title: 'Untitled',
+        status: 'todo',
+      });
+      expect(flowBlockedSummary).toMatchObject({
+        id: 'task_20260126_flowblocked',
+        blockedReason: { category: 'prerequisite' },
+      });
+      expect('description' in activeSummary).toBe(false);
+      expect('comments' in activeSummary).toBe(false);
+      expect('description' in archivedSummary!).toBe(false);
+      expect('comments' in archivedSummary!).toBe(false);
+    });
+
+    it('resolves YAML anchors, aliases, and merge keys identically in full and summary parsing', async () => {
+      const anchored = `---
+id: task_20260126_anchor
+shared: &shared blocked
+status: *shared
+defaults: &defaults
+  priority: high
+  project: anchor-project
+<<: *defaults
+title: Anchored Task
+type: code
+created: '2026-01-26T10:00:00.000Z'
+updated: '2026-01-26T10:00:00.000Z'
+---
+Body
+`;
+      await fs.writeFile(path.join(archiveDir, 'task_20260126_anchor-anchored-task.md'), anchored);
+
+      const [fullTask] = await service.listArchivedTasks();
+      const [summary] = await service.listArchivedTaskMetricsSummaries();
+
+      // The alias resolves through an anchor declared under a key the summary
+      // omits — a line-subset parser dropped the declaration and silently
+      // fell back to 'todo', corrupting dashboard status counts.
+      expect(fullTask.status).toBe('blocked');
+      expect(summary.status).toBe(fullTask.status);
+      expect(summary.priority).toBe(fullTask.priority);
+      expect(summary.project).toBe(fullTask.project);
+    });
+
+    it('never populates gray-matter global cache through read or write paths', async () => {
+      // cache/clearCache exist at runtime but are absent from gray-matter's types
+      const matterGlobals = matter as typeof matter & {
+        cache: Record<string, unknown>;
+        clearCache: () => void;
+      };
+      matterGlobals.clearCache();
+
+      const created = await service.createTask({
+        title: 'Cache Probe One',
+        description: 'distinct description one',
+      });
+      await service.createTask({
+        title: 'Cache Probe Two',
+        description: 'distinct description two',
+      });
+      await service.updateTask(created.id, { description: 'distinct description three' });
+      await service.listTasks();
+      await service.listArchivedTaskMetricsSummaries();
+
+      // matter() / matter.stringify() without an options object retain every
+      // distinct content string forever in matter.cache — an unbounded
+      // global. All task-service call sites must bypass it.
+      expect(Object.keys(matterGlobals.cache)).toHaveLength(0);
+    });
+
+    it('preserves lone UTF-16 surrogates through parsing and string detachment', async () => {
+      await fs.writeFile(
+        path.join(tasksDir, 'task_20260126_surrogate-surrogate.md'),
+        `---
+id: task_20260126_surrogate
+title: "pre\\uD800post"
+type: code
+status: todo
+priority: medium
+created: '2026-01-26T10:00:00.000Z'
+updated: '2026-01-26T10:00:00.000Z'
+---
+Body
+`
+      );
+
+      const tasks = await service.listTasks();
+      const task = tasks.find((t) => t.id === 'task_20260126_surrogate');
+
+      // A utf8 Buffer round-trip would mangle the lone surrogate into U+FFFD,
+      // corrupting the stored text on the next write-back.
+      expect(task?.title).toBe('pre\uD800post');
     });
   });
 

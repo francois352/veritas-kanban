@@ -865,8 +865,8 @@ export async function computeTaskCost(
     }
   }
 
-  // Look up task titles and projects
-  const allTasks = await taskService.listTasks();
+  // Look up only frontmatter fields needed for display; never retain task bodies here.
+  const allTasks = await taskService.listTaskMetricsSummaries();
   const taskMap = new Map(allTasks.map((t) => [t.id, { title: t.title, project: t.project }]));
 
   let totalCost = 0;
