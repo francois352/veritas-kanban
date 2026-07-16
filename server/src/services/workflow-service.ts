@@ -27,9 +27,13 @@ export class WorkflowService {
   private workflowsDir: string;
   private cache: Map<string, WorkflowDefinition> = new Map();
 
+  private readonly ready: Promise<void>;
+
   constructor(workflowsDir?: string) {
     this.workflowsDir = workflowsDir || getWorkflowsDir();
-    this.ensureDirectories();
+    // Unawaited mkdir raced writes issued right after construction (ENOENT
+    // under I/O load) — write paths await this.ready instead.
+    this.ready = this.ensureDirectories();
   }
 
   private async ensureDirectories(): Promise<void> {
@@ -152,6 +156,7 @@ export class WorkflowService {
    * Save a workflow definition
    */
   async saveWorkflow(workflow: WorkflowDefinition): Promise<void> {
+    await this.ready;
     this.validateWorkflow(workflow);
 
     const normalizedId = this.normalizeWorkflowId(workflow.id);
@@ -327,6 +332,7 @@ export class WorkflowService {
    * Save workflow ACL
    */
   async saveACL(acl: WorkflowACL): Promise<void> {
+    await this.ready;
     const aclPath = path.join(this.workflowsDir, '.acl.json');
 
     let acls: Record<string, WorkflowACL> = {};
@@ -349,6 +355,7 @@ export class WorkflowService {
    * Audit workflow changes
    */
   async auditChange(event: WorkflowAuditEvent): Promise<void> {
+    await this.ready;
     const auditPath = path.join(this.workflowsDir, '.audit.jsonl');
     const line = JSON.stringify(event) + '\n';
     await fs.appendFile(auditPath, line, 'utf-8');

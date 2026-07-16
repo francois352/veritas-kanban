@@ -25,6 +25,9 @@ const DEFAULT_CONFIG: TelemetryConfig = {
   traces: false,
 };
 
+const DEFAULT_EVENT_LIMIT = 1000;
+const MAX_EVENT_LIMIT = 10_000;
+
 export interface TelemetryServiceOptions {
   telemetryDir?: string;
   config?: Partial<TelemetryConfig>;
@@ -178,41 +181,7 @@ export class TelemetryService {
   async getEvents(options: TelemetryQueryOptions = {}): Promise<AnyTelemetryEvent[]> {
     await this.init();
 
-    const { type, since, until, taskId, project, limit } = options;
-    const types = type ? (Array.isArray(type) ? type : [type]) : null;
-    const effectiveLimit = Math.min(Math.max(limit ?? 1000, 1), 10_000);
-
-    // Determine which files to read based on date range
-    const files = await this.getEventFiles(since, until);
-
-    const events: AnyTelemetryEvent[] = [];
-
-    // Use streaming with early filtering
-    for (const file of files) {
-      await this.streamEventFile(file, (event) => {
-        // Apply filters during streaming (early rejection)
-        if (types && !types.includes(event.type)) return;
-        if (since && event.timestamp < since) return;
-        if (until && event.timestamp > until) return;
-        if (taskId && event.taskId !== taskId) return;
-        if (project && event.project !== project) return;
-
-        events.push(event);
-
-        // Note: Can't early-terminate by limit here because we need to sort first.
-        // However, filtering during streaming reduces memory usage significantly.
-      });
-    }
-
-    // Sort by timestamp (newest first)
-    events.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
-
-    // Apply limit after sort (guardrail default prevents unbounded reads)
-    if (events.length > effectiveLimit) {
-      return events.slice(0, effectiveLimit);
-    }
-
-    return events;
+    return this.collectBoundedEvents(options);
   }
 
   /**
@@ -286,8 +255,21 @@ export class TelemetryService {
     since?: string,
     until?: string
   ): Promise<number> {
-    const events = await this.getEvents({ type, since, until });
-    return events.length;
+    await this.init();
+
+    const options: TelemetryQueryOptions = { type, since, until };
+    const types = this.normalizeTypes(type);
+    const files = await this.getEventFiles(since, until);
+    let count = 0;
+
+    for (const file of files) {
+      await this.streamEventFile(file, (event) => {
+        if (!this.matchesQuery(event, options, types)) return;
+        count++;
+      });
+    }
+
+    return count;
   }
 
   /**
@@ -309,7 +291,19 @@ export class TelemetryService {
    */
   async exportAsJson(options: TelemetryQueryOptions = {}): Promise<string> {
     const events = await this.getEvents(options);
-    return JSON.stringify(events, null, 2);
+    if (events.length === 0) return '[]';
+
+    let json = '[\n';
+    for (let i = 0; i < events.length; i++) {
+      if (i > 0) json += ',\n';
+      const eventJson = JSON.stringify(events[i], null, 2)
+        .split('\n')
+        .map((line) => `  ${line}`)
+        .join('\n');
+      json += eventJson;
+    }
+    json += '\n]';
+    return json;
   }
 
   /**
@@ -339,7 +333,8 @@ export class TelemetryService {
       'error',
     ];
 
-    const rows = events.map((event) => {
+    const rows: string[] = [];
+    for (const event of events) {
       // Access optional union fields via Record — events are a discriminated union
       // and CSV export needs all possible fields regardless of event type
       // SAFETY: AnyTelemetryEvent subtypes have string-keyed fields we need to access generically
@@ -359,8 +354,8 @@ export class TelemetryService {
         cost: this.escapeCsvField(String(fields.cost ?? '')),
         error: this.escapeCsvField(String(fields.error ?? '')),
       };
-      return headers.map((h) => row[h]).join(',');
-    });
+      rows.push(headers.map((h) => row[h]).join(','));
+    }
 
     return [headers.join(','), ...rows].join('\n');
   }
@@ -381,6 +376,60 @@ export class TelemetryService {
   }
 
   // ============ Private Methods ============
+
+  private getEffectiveLimit(limit?: number): number {
+    return Math.min(Math.max(limit ?? DEFAULT_EVENT_LIMIT, 1), MAX_EVENT_LIMIT);
+  }
+
+  private normalizeTypes(
+    type?: TelemetryEventType | TelemetryEventType[]
+  ): TelemetryEventType[] | null {
+    if (!type) return null;
+    return Array.isArray(type) ? type : [type];
+  }
+
+  private matchesQuery(
+    event: AnyTelemetryEvent,
+    options: TelemetryQueryOptions,
+    types: TelemetryEventType[] | null
+  ): boolean {
+    if (types && !types.includes(event.type)) return false;
+    if (options.since && event.timestamp < options.since) return false;
+    if (options.until && event.timestamp > options.until) return false;
+    if (options.taskId && event.taskId !== options.taskId) return false;
+    if (options.project && event.project !== options.project) return false;
+    return true;
+  }
+
+  private trimToNewest(events: AnyTelemetryEvent[], limit: number): void {
+    events.sort((a, b) => b.timestamp.localeCompare(a.timestamp));
+    if (events.length > limit) {
+      events.length = limit;
+    }
+  }
+
+  private async collectBoundedEvents(options: TelemetryQueryOptions): Promise<AnyTelemetryEvent[]> {
+    const { type, since, until, limit } = options;
+    const types = this.normalizeTypes(type);
+    const effectiveLimit = this.getEffectiveLimit(limit);
+    const files = await this.getEventFiles(since, until);
+    const events: AnyTelemetryEvent[] = [];
+    const pruneThreshold = effectiveLimit * 2;
+
+    for (const file of files) {
+      await this.streamEventFile(file, (event) => {
+        if (!this.matchesQuery(event, options, types)) return;
+
+        events.push(event);
+        if (events.length > pruneThreshold) {
+          this.trimToNewest(events, effectiveLimit);
+        }
+      });
+    }
+
+    this.trimToNewest(events, effectiveLimit);
+    return events;
+  }
 
   /**
    * Get the filename for a given date

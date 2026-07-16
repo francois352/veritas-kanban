@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
@@ -8,6 +8,47 @@ import type {
   RunTelemetryEvent,
   TokenTelemetryEvent,
 } from '@veritas-kanban/shared';
+
+async function writeSyntheticTelemetryFile(
+  telemetryDir: string,
+  count: number,
+  type: 'task.created' | 'run.tokens' = 'task.created'
+): Promise<void> {
+  const date = new Date().toISOString().slice(0, 10);
+  const baseTime = new Date(`${date}T00:00:00.000Z`).getTime();
+  const lines: string[] = [];
+
+  for (let i = 0; i < count; i++) {
+    const timestamp = new Date(baseTime + i * 1000).toISOString();
+    const event =
+      type === 'run.tokens'
+        ? {
+            id: `evt_${i}`,
+            type,
+            timestamp,
+            taskId: `task_${i % 25}`,
+            project: 'large-project',
+            agent: `agent-${i % 5}`,
+            inputTokens: 100 + i,
+            outputTokens: 50 + i,
+            totalTokens: 150 + i * 2,
+            payload: 'x'.repeat(2048),
+          }
+        : {
+            id: `evt_${i}`,
+            type,
+            timestamp,
+            taskId: `task_${i % 25}`,
+            project: 'large-project',
+            status: 'todo',
+            payload: 'x'.repeat(2048),
+          };
+
+    lines.push(JSON.stringify(event));
+  }
+
+  await fs.writeFile(path.join(telemetryDir, `events-${date}.ndjson`), `${lines.join('\n')}\n`);
+}
 
 describe('TelemetryService', () => {
   let service: TelemetryService;
@@ -25,6 +66,7 @@ describe('TelemetryService', () => {
   });
 
   afterEach(async () => {
+    vi.restoreAllMocks();
     // Clean up temp directory
     await fs.rm(testDir, { recursive: true, force: true });
   });
@@ -176,6 +218,39 @@ describe('TelemetryService', () => {
       expect(events.length).toBe(5);
     });
 
+    it('should retain only a bounded page for large matching datasets', async () => {
+      await writeSyntheticTelemetryFile(testDir, 12_050);
+
+      const events = await service.getEvents({ type: 'task.created' });
+
+      expect(events).toHaveLength(1000);
+      expect(events[0].id).toBe('evt_12049');
+      expect(events[999].id).toBe('evt_11050');
+    });
+
+    it('should skip malformed NDJSON lines while streaming bounded results', async () => {
+      const date = new Date().toISOString().slice(0, 10);
+      await fs.writeFile(
+        path.join(testDir, `events-${date}.ndjson`),
+        [
+          '{not-json',
+          '',
+          JSON.stringify({
+            id: 'evt_valid',
+            type: 'task.created',
+            timestamp: `${date}T00:00:00.000Z`,
+            taskId: 'task_valid',
+          }),
+        ].join('\n')
+      );
+
+      const [event] = await service.getEvents({ type: 'task.created' });
+      const count = await service.countEvents('task.created');
+
+      expect(event.id).toBe('evt_valid');
+      expect(count).toBe(1);
+    });
+
     it('should sort by timestamp descending (newest first)', async () => {
       await service.emit<TaskTelemetryEvent>({ type: 'task.created', taskId: 'task_1' });
       await new Promise((r) => setTimeout(r, 10)); // Small delay to ensure different timestamps
@@ -197,6 +272,14 @@ describe('TelemetryService', () => {
 
       const count = await service.countEvents('task.created');
       expect(count).toBe(2);
+    });
+
+    it('should stream counts beyond the query page cap without retaining event arrays', async () => {
+      await writeSyntheticTelemetryFile(testDir, 12_050);
+
+      const count = await service.countEvents('task.created');
+
+      expect(count).toBe(12_050);
     });
   });
 
@@ -223,6 +306,23 @@ describe('TelemetryService', () => {
 
       expect(eventsByTask.get('task_1')?.length).toBe(3);
       expect(eventsByTask.get('task_2')?.length).toBe(1);
+    });
+  });
+
+  describe('export', () => {
+    it('should export bounded JSON without stringifying the full event array', async () => {
+      await writeSyntheticTelemetryFile(testDir, 2500, 'run.tokens');
+
+      const stringifySpy = vi.spyOn(JSON, 'stringify');
+      const json = await service.exportAsJson({ type: 'run.tokens', limit: 25 });
+
+      const arrayStringifyCalls = stringifySpy.mock.calls.filter(([value]) => Array.isArray(value));
+      expect(arrayStringifyCalls).toHaveLength(0);
+
+      const exported = JSON.parse(json);
+      expect(exported).toHaveLength(25);
+      expect(exported[0].id).toBe('evt_2499');
+      expect(exported[24].id).toBe('evt_2475');
     });
   });
 
