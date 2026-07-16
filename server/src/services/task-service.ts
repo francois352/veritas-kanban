@@ -2,7 +2,6 @@ import fs from 'fs/promises';
 import { watch, type FSWatcher } from '../storage/fs-helpers.js';
 import path from 'path';
 import matter from 'gray-matter';
-import yaml from 'yaml';
 import { nanoid } from 'nanoid';
 import type {
   Task,
@@ -68,18 +67,6 @@ function makeSlug(text: string): string {
 // and local dev all agree on where tasks live.
 const DEFAULT_TASKS_DIR = getTasksActiveDir();
 const DEFAULT_ARCHIVE_DIR = getTasksArchiveDir();
-const TASK_SUMMARY_FRONTMATTER_KEYS = new Set([
-  'id',
-  'title',
-  'type',
-  'status',
-  'priority',
-  'project',
-  'sprint',
-  'agent',
-  'created',
-  'updated',
-]);
 const TASK_STATUSES: ReadonlySet<Task['status']> = new Set([
   'todo',
   'in-progress',
@@ -449,7 +436,9 @@ export class TaskService {
   }
 
   private detachString(value: string): string {
-    return Buffer.from(value, 'utf8').toString('utf8');
+    // utf16le preserves every UTF-16 code unit, including lone surrogates —
+    // a utf8 round-trip would replace those with U+FFFD and corrupt task text.
+    return Buffer.from(value, 'utf16le').toString('utf16le');
   }
 
   private detachParsedStrings<T>(value: T, seen = new WeakMap<object, unknown>()): T {
@@ -497,70 +486,19 @@ export class TaskService {
     return undefined;
   }
 
-  private extractTaskSummaryFrontmatter(content: string): string | null {
-    if (!content.startsWith('---')) return null;
-
-    let cursor = content.startsWith('---\r\n') ? 5 : 4;
-    const lines: string[] = [];
-    let currentIncludedKey: string | null = null;
-    let foundClosingFence = false;
-
-    while (cursor < content.length) {
-      const nextLine = content.indexOf('\n', cursor);
-      const rawLine = nextLine === -1 ? content.slice(cursor) : content.slice(cursor, nextLine);
-      const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
-      cursor = nextLine === -1 ? content.length : nextLine + 1;
-
-      if (line === '---') {
-        foundClosingFence = true;
-        break;
-      }
-
-      const topLevel = line.match(/^([A-Za-z][\w-]*):(?:\s*(.*))?$/);
-      if (topLevel) {
-        const key = topLevel[1];
-        currentIncludedKey = null;
-
-        if (TASK_SUMMARY_FRONTMATTER_KEYS.has(key)) {
-          lines.push(line);
-          currentIncludedKey = key;
-        } else if (key === 'blockedReason') {
-          lines.push(topLevel[2]?.trim() ? line : 'blockedReason:');
-          currentIncludedKey = key;
-        }
-        continue;
-      }
-
-      if (!/^\s+/.test(line)) {
-        currentIncludedKey = null;
-        continue;
-      }
-
-      if (!currentIncludedKey) continue;
-
-      if (currentIncludedKey === 'blockedReason') {
-        if (/^\s+category:/.test(line)) {
-          lines.push(line);
-        }
-        continue;
-      }
-
-      lines.push(line);
-    }
-
-    if (!foundClosingFence || lines.length === 0) return null;
-    return lines.join('\n');
-  }
-
   private parseTaskMetricsSummary(content: string, filename: string): TaskMetricsSummary | null {
+    // Parse with the same gray-matter call parseTaskFile uses, so anchors,
+    // aliases, and merge keys resolve identically — a line-subset parser
+    // dropped anchor declarations under omitted keys and corrupted summary
+    // fields. The full parse tree is transient; only detached summary
+    // scalars are retained.
     let data: Record<string, unknown> = {};
-    const summaryFrontmatter = this.extractTaskSummaryFrontmatter(content);
-    if (summaryFrontmatter) {
-      try {
-        data = (yaml.parse(summaryFrontmatter) as Record<string, unknown> | null) ?? {};
-      } catch (error) {
-        log.warn({ err: error, filename }, 'Failed to parse task summary frontmatter');
-      }
+    try {
+      // The options object bypasses gray-matter's unbounded global cache,
+      // which would otherwise retain every raw file string + parse tree.
+      data = (matter(content, {}).data as Record<string, unknown> | null) ?? {};
+    } catch (error) {
+      log.warn({ err: error, filename }, 'Failed to parse task summary frontmatter');
     }
 
     const id = this.detachParsedScalar(data.id) || this.detachString(filename.split('-')[0] || '');
@@ -619,7 +557,9 @@ export class TaskService {
 
   private parseTaskFile(content: string, filename: string): Task | null {
     try {
-      const { data, content: description } = matter(content);
+      // Options object bypasses gray-matter's unbounded global content cache
+      // (matter.cache retains every distinct file string forever otherwise).
+      const { data, content: description } = matter(content, {});
 
       // Extract review comments from description if present
       let cleanDescription = description;

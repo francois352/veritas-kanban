@@ -325,6 +325,60 @@ Flow-style blocked reason.
       expect('description' in archivedSummary!).toBe(false);
       expect('comments' in archivedSummary!).toBe(false);
     });
+
+    it('resolves YAML anchors, aliases, and merge keys identically in full and summary parsing', async () => {
+      const anchored = `---
+id: task_20260126_anchor
+shared: &shared blocked
+status: *shared
+defaults: &defaults
+  priority: high
+  project: anchor-project
+<<: *defaults
+title: Anchored Task
+type: code
+created: '2026-01-26T10:00:00.000Z'
+updated: '2026-01-26T10:00:00.000Z'
+---
+Body
+`;
+      await fs.writeFile(path.join(archiveDir, 'task_20260126_anchor-anchored-task.md'), anchored);
+
+      const [fullTask] = await service.listArchivedTasks();
+      const [summary] = await service.listArchivedTaskMetricsSummaries();
+
+      // The alias resolves through an anchor declared under a key the summary
+      // omits — a line-subset parser dropped the declaration and silently
+      // fell back to 'todo', corrupting dashboard status counts.
+      expect(fullTask.status).toBe('blocked');
+      expect(summary.status).toBe(fullTask.status);
+      expect(summary.priority).toBe(fullTask.priority);
+      expect(summary.project).toBe(fullTask.project);
+    });
+
+    it('preserves lone UTF-16 surrogates through parsing and string detachment', async () => {
+      await fs.writeFile(
+        path.join(tasksDir, 'task_20260126_surrogate-surrogate.md'),
+        `---
+id: task_20260126_surrogate
+title: "pre\\uD800post"
+type: code
+status: todo
+priority: medium
+created: '2026-01-26T10:00:00.000Z'
+updated: '2026-01-26T10:00:00.000Z'
+---
+Body
+`
+      );
+
+      const tasks = await service.listTasks();
+      const task = tasks.find((t) => t.id === 'task_20260126_surrogate');
+
+      // A utf8 Buffer round-trip would mangle the lone surrogate into U+FFFD,
+      // corrupting the stored text on the next write-back.
+      expect(task?.title).toBe('pre\uD800post');
+    });
   });
 
   describe('Task creation', () => {

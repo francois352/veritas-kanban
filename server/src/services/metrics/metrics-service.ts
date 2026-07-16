@@ -3,7 +3,7 @@
  * Maintains the original class API for backwards compatibility.
  */
 import { getTelemetryService } from '../telemetry-service.js';
-import { TaskService } from '../task-service.js';
+import { getTaskService, type TaskService } from '../task-service.js';
 import { TELEMETRY_DIR } from './helpers.js';
 import { computeTaskMetrics, computeVelocityMetrics } from './task-metrics.js';
 import { computeRunMetrics, computeDurationMetrics, computeFailedRuns } from './run-metrics.js';
@@ -38,7 +38,8 @@ type AllMetricsResult = {
 };
 
 interface MetricsCacheEntry<T> {
-  expiresAt: number;
+  /** null while the loader is in flight — pending entries never expire */
+  expiresAt: number | null;
   value: Promise<T>;
 }
 
@@ -52,10 +53,12 @@ export class MetricsService {
   private allMetricsCache = new Map<string, MetricsCacheEntry<AllMetricsResult>>();
   private taskCostCache = new Map<string, MetricsCacheEntry<TaskCostMetrics>>();
 
-  constructor(telemetryDir?: string) {
+  constructor(telemetryDir?: string, taskService?: TaskService) {
     // Keep TelemetryService init for potential future use
     getTelemetryService();
-    this.taskService = new TaskService();
+    // Reuse the singleton: a private TaskService would hydrate a second full
+    // task cache (descriptions + comments), doubling baseline heap pressure.
+    this.taskService = taskService ?? getTaskService();
     this.telemetryDir = telemetryDir || TELEMETRY_DIR;
   }
 
@@ -178,28 +181,38 @@ export class MetricsService {
     key: string,
     loader: () => Promise<T>
   ): Promise<T> {
-    const now = Date.now();
     const cached = cache.get(key);
-    if (cached && cached.expiresAt > now) {
+    if (cached && (cached.expiresAt === null || cached.expiresAt > Date.now())) {
       return cached.value;
     }
 
-    const value = loader().catch((error) => {
-      cache.delete(key);
-      throw error;
-    });
+    const entry: MetricsCacheEntry<T> = { expiresAt: null, value: undefined as never };
+    entry.value = loader().then(
+      (result) => {
+        // Start the TTL clock at resolution so a loader slower than the TTL
+        // still deduplicates concurrent callers instead of spawning a
+        // duplicate aggregation.
+        entry.expiresAt = Date.now() + this.cacheTtlMs;
+        return result;
+      },
+      (error) => {
+        // Only evict our own entry — an older rejection must not delete a
+        // newer in-flight or resolved entry under the same key.
+        if (cache.get(key) === entry) {
+          cache.delete(key);
+        }
+        throw error;
+      }
+    );
 
-    cache.set(key, {
-      expiresAt: now + this.cacheTtlMs,
-      value,
-    });
+    cache.set(key, entry);
 
     if (cache.size > this.maxCacheEntries) {
       const oldestKey = cache.keys().next().value;
       if (oldestKey) cache.delete(oldestKey);
     }
 
-    return value;
+    return entry.value;
   }
 }
 

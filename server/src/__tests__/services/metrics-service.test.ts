@@ -21,6 +21,7 @@ vi.mock('../../services/task-service.js', () => ({
   TaskService: vi.fn().mockImplementation(function TaskService() {
     return {};
   }),
+  getTaskService: vi.fn(() => ({})),
 }));
 
 vi.mock('../../services/metrics/helpers.js', () => ({
@@ -173,6 +174,70 @@ describe('MetricsService cache', () => {
     await expect(service.getAllMetrics('7d')).rejects.toThrow('telemetry unavailable');
     await expect(service.getAllMetrics('7d')).resolves.toEqual(makeAllMetrics(1));
     expect(mocks.computeAllMetrics).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a pending load alive past the TTL instead of spawning a duplicate aggregation', async () => {
+    const { MetricsService } = await import('../../services/metrics/metrics-service.js');
+    let resolveLoad!: (value: unknown) => void;
+    mocks.computeAllMetrics
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            resolveLoad = resolve;
+          })
+      )
+      .mockResolvedValueOnce(makeAllMetrics(2));
+
+    const service = new MetricsService('/tmp/veritas-test-telemetry');
+    const first = service.getAllMetrics('7d');
+
+    // Loader is slower than the TTL — a second caller must join the pending
+    // load, not start a duplicate aggregation.
+    vi.advanceTimersByTime(10_001);
+    const second = service.getAllMetrics('7d');
+    expect(mocks.computeAllMetrics).toHaveBeenCalledTimes(1);
+
+    const result = makeAllMetrics(1);
+    resolveLoad(result);
+    await expect(first).resolves.toBe(result);
+    await expect(second).resolves.toBe(result);
+
+    // TTL starts at resolution: still cached now, refreshed after a full TTL.
+    await expect(service.getAllMetrics('7d')).resolves.toBe(result);
+    expect(mocks.computeAllMetrics).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(10_001);
+    await expect(service.getAllMetrics('7d')).resolves.toEqual(makeAllMetrics(2));
+    expect(mocks.computeAllMetrics).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not let a stale rejection evict a newer entry under the same key', async () => {
+    const { MetricsService } = await import('../../services/metrics/metrics-service.js');
+    const service = new MetricsService('/tmp/veritas-test-telemetry') as unknown as {
+      getCached<T>(cache: Map<string, unknown>, key: string, loader: () => Promise<T>): Promise<T>;
+    };
+    const cache = new Map<string, unknown>();
+
+    let rejectFirst!: (error: Error) => void;
+    const first = service.getCached(
+      cache,
+      'key',
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectFirst = reject;
+        })
+    );
+    first.catch(() => undefined);
+
+    // Simulate the first entry being displaced (e.g. max-size eviction),
+    // then a newer entry taking over the same key.
+    cache.delete('key');
+    const second = service.getCached(cache, 'key', () => Promise.resolve('newer'));
+
+    rejectFirst(new Error('stale failure'));
+    await expect(first).rejects.toThrow('stale failure');
+    await expect(second).resolves.toBe('newer');
+    // The stale rejection must not have deleted the newer cache entry.
+    expect(cache.has('key')).toBe(true);
   });
 
   it('caches task-cost metrics with the same TTL behavior', async () => {
