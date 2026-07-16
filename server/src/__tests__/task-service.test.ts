@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import fs from 'fs/promises';
 import path from 'path';
 import os from 'os';
+import matter from 'gray-matter';
 import { TaskService } from '../services/task-service.js';
 
 describe('TaskService', () => {
@@ -354,6 +355,32 @@ Body
       expect(summary.status).toBe(fullTask.status);
       expect(summary.priority).toBe(fullTask.priority);
       expect(summary.project).toBe(fullTask.project);
+    });
+
+    it('never populates gray-matter global cache through read or write paths', async () => {
+      // cache/clearCache exist at runtime but are absent from gray-matter's types
+      const matterGlobals = matter as typeof matter & {
+        cache: Record<string, unknown>;
+        clearCache: () => void;
+      };
+      matterGlobals.clearCache();
+
+      const created = await service.createTask({
+        title: 'Cache Probe One',
+        description: 'distinct description one',
+      });
+      await service.createTask({
+        title: 'Cache Probe Two',
+        description: 'distinct description two',
+      });
+      await service.updateTask(created.id, { description: 'distinct description three' });
+      await service.listTasks();
+      await service.listArchivedTaskMetricsSummaries();
+
+      // matter() / matter.stringify() without an options object retain every
+      // distinct content string forever in matter.cache — an unbounded
+      // global. All task-service call sites must bypass it.
+      expect(Object.keys(matterGlobals.cache)).toHaveLength(0);
     });
 
     it('preserves lone UTF-16 surrogates through parsing and string detachment', async () => {

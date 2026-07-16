@@ -542,7 +542,10 @@ export class TaskService {
     // Filter out undefined values (gray-matter can't serialize them)
     const frontmatter = this.deepCleanUndefined(rest);
 
-    const content = matter.stringify(description || '', frontmatter);
+    // Options object bypasses gray-matter's global cache — stringify parses
+    // its string input internally and would otherwise retain every distinct
+    // task description forever.
+    const content = matter.stringify(description || '', frontmatter, {});
 
     // Add review comments section if present
     if (reviewComments && reviewComments.length > 0) {
